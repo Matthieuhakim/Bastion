@@ -8,12 +8,17 @@ datasource db {
 }
 
 model Agent {
-  id        String   @id @default(uuid())
-  name      String
-  apiKey    String   @unique @map("api_key")
-  isActive  Boolean  @default(true) @map("is_active")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id                  String   @id @default(uuid())
+  name                String
+  description         String?
+  callbackUrl         String?  @map("callback_url")
+  apiKeyHash          String   @unique @map("api_key_hash")
+  publicKey           String   @map("public_key")
+  keyFingerprint      String   @map("key_fingerprint")
+  encryptedPrivateKey String   @map("encrypted_private_key")
+  isActive            Boolean  @default(true) @map("is_active")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
 
   @@map("agents")
 }

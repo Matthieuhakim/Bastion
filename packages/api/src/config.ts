@@ -6,6 +6,7 @@ interface Config {
   databaseUrl: string;
   redisUrl: string;
   masterKey: string;
+  projectApiKey: string;
 }
 
 function requireEnv(name: string): string {
@@ -22,4 +23,5 @@ export const config: Config = {
   databaseUrl: requireEnv('DATABASE_URL'),
   redisUrl: process.env['REDIS_URL'] ?? 'redis://localhost:6379',
   masterKey: process.env['MASTER_KEY'] ?? '',
+  projectApiKey: requireEnv('PROJECT_API_KEY'),
 };

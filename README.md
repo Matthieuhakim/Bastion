@@ -20,7 +20,11 @@ Bastion sits between your AI agents and the APIs they call. It:
 ### What's working now
 
 - Express 5 API server with health check endpoint
-- Prisma schema with agent model
+- **Agent registration** with Ed25519 keypair generation (`POST /v1/agents`)
+- **Agent CRUD** — list, get, update, soft-delete agents
+- **Admin auth** — `PROJECT_API_KEY` protects management routes (timing-safe comparison)
+- **Agent auth middleware** — agents authenticate via `Bearer <agent_secret>` (SHA-256 hashed, never stored plaintext)
+- Prisma schema with expanded Agent model (keypairs, hashed secrets, fingerprints)
 - TypeScript and Python SDK stubs
 - Local dev environment via Docker Compose (PostgreSQL + Redis)
 
@@ -81,14 +85,16 @@ pip install -e packages/sdk-python
 
 ## Scripts
 
-| Command              | Description                        |
-| -------------------- | ---------------------------------- |
-| `npm run dev`        | Start the API server in watch mode |
-| `npm run build`      | Build all TypeScript packages      |
-| `npm run lint`       | Run ESLint                         |
-| `npm run format`     | Format code with Prettier          |
-| `npm run db:migrate` | Run Prisma migrations              |
-| `npm run db:studio`  | Open Prisma Studio                 |
+| Command                    | Description                        |
+| -------------------------- | ---------------------------------- |
+| `npm run dev`              | Start the API server in watch mode |
+| `npm run build`            | Build all TypeScript packages      |
+| `npm run lint`             | Run ESLint                         |
+| `npm run format`           | Format code with Prettier          |
+| `npm test`                 | Run unit tests (Vitest)            |
+| `npm run test:integration` | Run integration tests (needs DB)   |
+| `npm run db:migrate`       | Run Prisma migrations              |
+| `npm run db:studio`        | Open Prisma Studio                 |
 
 ## Tech Stack
 

@@ -25,30 +25,30 @@ Step-by-step build order for the MVP. Each phase builds on the previous one. Che
 
 ### Steps
 
-- [ ] **1.1 Expand Prisma schema for agents**
+- [x] **1.1 Expand Prisma schema for agents**
   - Add fields: `description`, `callbackUrl`, `publicKey`, `keyFingerprint`, `encryptedPrivateKey`
   - `apiKey` becomes a hashed value (store hash, not plaintext)
   - Add `isActive` flag for kill switch
 
-- [ ] **1.2 Ed25519 keypair generation**
+- [x] **1.2 Ed25519 keypair generation**
   - Install `@noble/ed25519` (modern, audited, fast)
   - Service: `generateKeypair()` → returns `{ publicKey, privateKey, fingerprint }`
   - Fingerprint = SHA-256 of public key, hex-encoded
   - Private key will be envelope-encrypted (Phase 2), stored as hex for now
 
-- [ ] **1.3 Agent registration endpoint**
+- [x] **1.3 Agent registration endpoint**
   - `POST /v1/agents` — creates agent, generates keypair, returns `agent_id`, `agent_secret` (shown once), `public_key`, `key_fingerprint`
   - `GET /v1/agents` — list agents (masked secrets)
   - `GET /v1/agents/:id` — get single agent
   - `PATCH /v1/agents/:id` — update name/description/callbackUrl/isActive
   - `DELETE /v1/agents/:id` — soft delete (set isActive = false)
 
-- [ ] **1.4 Agent authentication middleware**
+- [x] **1.4 Agent authentication middleware**
   - Agents authenticate via `Authorization: Bearer <agent_secret>`
   - Middleware: extract token → hash → look up in DB → attach `agent` to `req`
   - Protect all `/v1/*` routes except health
 
-- [ ] **1.5 Project-level API key auth (admin routes)**
+- [x] **1.5 Project-level API key auth (admin routes)**
   - Separate auth for the developer managing agents/credentials/policies
   - For MVP: a single project API key set via env var `PROJECT_API_KEY`
   - Admin middleware checks `Authorization: Bearer <project_key>`
@@ -516,7 +516,7 @@ curl http://localhost:3000/v1/audit/verify?agentId=... \
 Phase 0 (Scaffolding) ✅
     │
     v
-Phase 1 (Agents + Auth)
+Phase 1 (Agents + Auth) ✅
     │
     ├──────────────────┐
     v                  v

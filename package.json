@@ -14,7 +14,9 @@
     "format": "prettier --write 'packages/*/src/**/*.ts'",
     "format:check": "prettier --check 'packages/*/src/**/*.ts'",
     "db:migrate": "npm run db:migrate --workspace=packages/api",
-    "db:studio": "npm run db:studio --workspace=packages/api"
+    "db:studio": "npm run db:studio --workspace=packages/api",
+    "test": "npm run test --workspaces --if-present",
+    "test:integration": "npm run test:integration --workspace=packages/api"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",
