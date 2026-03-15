@@ -1,0 +1,22 @@
+node_modules/
+dist/
+.env
+*.tsbuildinfo
+
+# Python
+__pycache__/
+*.egg-info/
+.venv/
+*.pyc
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Prisma
+packages/api/prisma/*.db
