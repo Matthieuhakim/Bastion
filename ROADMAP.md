@@ -305,23 +305,23 @@ curl -X POST http://localhost:3000/v1/proxy/execute \
 
 ### Steps
 
-- [ ] **5.1 Pending request storage (Redis)**
+- [x] **5.1 Pending request storage (Redis)**
   - When ESCALATE triggers, store request in Redis with TTL (default 5 min)
   - Key: `hitl:{requestId}` → full request context as JSON
   - Status: `pending` | `approved` | `denied` | `expired`
 
-- [ ] **5.2 Webhook notification**
+- [x] **5.2 Webhook notification**
   - POST to agent's `callbackUrl` or a configured webhook URL
   - Payload: `{ requestId, agentId, action, params, reason, approveUrl, denyUrl }`
 
-- [ ] **5.3 Approval/denial endpoints**
+- [x] **5.3 Approval/denial endpoints**
   - `POST /v1/hitl/:requestId/approve` — approve pending request (admin auth)
   - `POST /v1/hitl/:requestId/deny` — deny pending request (admin auth)
   - `GET /v1/hitl/pending` — list pending requests (admin auth)
   - On approve: resume proxy execution from Phase 4
   - On deny: return 403 to waiting agent
 
-- [ ] **5.4 Request hold + resume mechanism**
+- [x] **5.4 Request hold + resume mechanism**
   - Agent's proxy request is held open (long poll) while awaiting approval
   - Configurable timeout (default 5 min, max 15 min)
   - On timeout: auto-deny (fail closed)
@@ -536,7 +536,7 @@ Phase 3 (Policies) ✅  │
 Phase 4 (Proxy) ✅ ────┤ ←── audit integrated into proxy
     │                  │
     v                  │
-Phase 5 (HITL) ────────┘
+Phase 5 (HITL) ✅ ─────┘
     │
     v
 Phase 7 (SDKs)

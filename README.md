@@ -176,13 +176,14 @@ Options: `header`, `query` (appends to URL), or `body` (adds a field to the requ
 
 **Proxy Mode** — The core flow: authenticate agent, evaluate policy, decrypt credential, inject it into the outbound request, call the external API, return the result. Includes SSRF protection (blocks localhost, cloud metadata endpoints).
 
+**Human-in-the-Loop Gate** — When a policy triggers ESCALATE (e.g., amount exceeds approval threshold), the agent's request is held open while a human reviews it. Admins approve or deny via API endpoints. On approval, the proxy flow resumes transparently. On denial or timeout (default 5 min), the agent gets a 403. Optional webhook notifications to the agent's `callbackUrl`.
+
 **Fail closed** — No policy for an agent+credential pair = DENY. Bastion never silently allows a request.
 
 ## Roadmap
 
 See [ROADMAP.md](ROADMAP.md) for the full plan. Coming next:
 
-- **Human-in-the-Loop Gate** — pause ESCALATE requests, notify via Slack/webhook, approve or deny
 - **Signed Audit Chain** — Ed25519-signed, SHA-256 hash-chained records for every decision
 - **SDKs** — full TypeScript and Python client libraries
 - **Dashboard** — web UI for monitoring agents, approving requests, viewing audit logs

@@ -120,16 +120,6 @@ proxyRouter.post('/execute', async (req: Request, res: Response) => {
   const input = validateExecuteInput(req);
   const result = await executeProxy(input);
 
-  if (result.outcome === 'escalated') {
-    res.status(202).json({
-      decision: 'ESCALATE',
-      policyId: result.policyId,
-      reason: result.reason,
-      message: 'Request requires human approval',
-    });
-    return;
-  }
-
   res.json({
     upstream: result.upstream,
     meta: result.meta,

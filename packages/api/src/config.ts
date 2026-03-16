@@ -7,6 +7,7 @@ interface Config {
   redisUrl: string;
   masterKey: string;
   projectApiKey: string;
+  baseUrl: string;
 }
 
 function requireEnv(name: string): string {
@@ -24,4 +25,5 @@ export const config: Config = {
   redisUrl: process.env['REDIS_URL'] ?? 'redis://localhost:6379',
   masterKey: process.env['MASTER_KEY'] ?? '',
   projectApiKey: requireEnv('PROJECT_API_KEY'),
+  baseUrl: process.env['BASE_URL'] ?? `http://localhost:${process.env['PORT'] ?? '3000'}`,
 };

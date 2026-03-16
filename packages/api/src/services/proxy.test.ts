@@ -9,6 +9,9 @@ vi.mock('./db.js', () => ({
     credential: {
       findUnique: vi.fn(),
     },
+    agent: {
+      findUnique: vi.fn(),
+    },
   },
 }));
 
@@ -27,16 +30,30 @@ vi.mock('./httpClient.js', () => ({
   MAX_TIMEOUT_MS: 120_000,
 }));
 
+vi.mock('./hitl.js', () => ({
+  createPendingRequest: vi.fn(),
+  waitForResolution: vi.fn(),
+}));
+
+vi.mock('./notifications.js', () => ({
+  sendWebhookNotification: vi.fn().mockResolvedValue(undefined),
+  buildWebhookPayload: vi.fn().mockReturnValue({}),
+}));
+
 import { prisma } from './db.js';
 import { decryptCredential } from './credentials.js';
 import { evaluateRequest, commitRateLimitAndSpend } from './policyEngine.js';
 import { callExternalApi } from './httpClient.js';
+import { createPendingRequest, waitForResolution } from './hitl.js';
 
-const mockFindUnique = prisma.credential.findUnique as ReturnType<typeof vi.fn>;
+const mockFindCredential = prisma.credential.findUnique as ReturnType<typeof vi.fn>;
+const mockFindAgent = prisma.agent.findUnique as ReturnType<typeof vi.fn>;
 const mockDecrypt = decryptCredential as ReturnType<typeof vi.fn>;
 const mockEvaluate = evaluateRequest as ReturnType<typeof vi.fn>;
 const mockCommit = commitRateLimitAndSpend as ReturnType<typeof vi.fn>;
 const mockCallApi = callExternalApi as ReturnType<typeof vi.fn>;
+const mockCreatePending = createPendingRequest as ReturnType<typeof vi.fn>;
+const mockWaitForResolution = waitForResolution as ReturnType<typeof vi.fn>;
 
 function makeInput(overrides: Partial<ProxyExecuteInput> = {}): ProxyExecuteInput {
   return {
@@ -68,7 +85,8 @@ function makeCredential(overrides: Record<string, unknown> = {}) {
 beforeEach(() => {
   vi.clearAllMocks();
   // Default happy-path mocks
-  mockFindUnique.mockResolvedValue(makeCredential());
+  mockFindCredential.mockResolvedValue(makeCredential());
+  mockFindAgent.mockResolvedValue(null);
   mockEvaluate.mockResolvedValue({ decision: 'ALLOW', policyId: 'policy-1', reason: 'Allowed' });
   mockDecrypt.mockResolvedValue('sk_test_abc123');
   mockCallApi.mockResolvedValue({
@@ -85,21 +103,19 @@ describe('executeProxy', () => {
       const result = await executeProxy(makeInput());
 
       expect(result.outcome).toBe('executed');
-      if (result.outcome === 'executed') {
-        expect(result.upstream.status).toBe(200);
-        expect(result.upstream.body).toEqual({ result: 'ok' });
-        expect(result.meta.credentialId).toBe('cred-1');
-        expect(result.meta.action).toBe('test.get');
-        expect(result.meta.policyDecision).toBe('ALLOW');
-        expect(result.meta.policyId).toBe('policy-1');
-        expect(result.meta.durationMs).toBeGreaterThanOrEqual(0);
-      }
+      expect(result.upstream.status).toBe(200);
+      expect(result.upstream.body).toEqual({ result: 'ok' });
+      expect(result.meta.credentialId).toBe('cred-1');
+      expect(result.meta.action).toBe('test.get');
+      expect(result.meta.policyDecision).toBe('ALLOW');
+      expect(result.meta.policyId).toBe('policy-1');
+      expect(result.meta.durationMs).toBeGreaterThanOrEqual(0);
     });
 
     it('calls services in correct order', async () => {
       await executeProxy(makeInput());
 
-      expect(mockFindUnique).toHaveBeenCalledBefore(mockEvaluate);
+      expect(mockFindCredential).toHaveBeenCalledBefore(mockEvaluate);
       expect(mockEvaluate).toHaveBeenCalledBefore(mockDecrypt);
       expect(mockDecrypt).toHaveBeenCalledBefore(mockCallApi);
       expect(mockCallApi).toHaveBeenCalledBefore(mockCommit);
@@ -114,14 +130,14 @@ describe('executeProxy', () => {
 
   describe('credential ownership', () => {
     it('throws ForbiddenError when credential not found', async () => {
-      mockFindUnique.mockResolvedValue(null);
+      mockFindCredential.mockResolvedValue(null);
 
       await expect(executeProxy(makeInput())).rejects.toThrow(ForbiddenError);
       await expect(executeProxy(makeInput())).rejects.toThrow('Credential not found');
     });
 
     it('throws ForbiddenError when credential belongs to different agent', async () => {
-      mockFindUnique.mockResolvedValue(makeCredential({ agentId: 'other-agent' }));
+      mockFindCredential.mockResolvedValue(makeCredential({ agentId: 'other-agent' }));
 
       await expect(executeProxy(makeInput())).rejects.toThrow(ForbiddenError);
       await expect(executeProxy(makeInput())).rejects.toThrow(
@@ -145,26 +161,6 @@ describe('executeProxy', () => {
       expect(mockCommit).not.toHaveBeenCalled();
     });
 
-    it('returns escalated result on ESCALATE', async () => {
-      mockEvaluate.mockResolvedValue({
-        decision: 'ESCALATE',
-        policyId: 'policy-1',
-        reason: 'Amount exceeds threshold',
-      });
-
-      const result = await executeProxy(makeInput());
-
-      expect(result.outcome).toBe('escalated');
-      if (result.outcome === 'escalated') {
-        expect(result.policyId).toBe('policy-1');
-        expect(result.reason).toBe('Amount exceeds threshold');
-      }
-      // Upstream should not be called
-      expect(mockDecrypt).not.toHaveBeenCalled();
-      expect(mockCallApi).not.toHaveBeenCalled();
-      expect(mockCommit).not.toHaveBeenCalled();
-    });
-
     it('passes params to evaluateRequest', async () => {
       await executeProxy(makeInput({ params: { amount: 500, ip: '10.0.0.1' } }));
 
@@ -177,10 +173,99 @@ describe('executeProxy', () => {
     });
   });
 
+  describe('HITL escalation', () => {
+    beforeEach(() => {
+      mockEvaluate.mockResolvedValue({
+        decision: 'ESCALATE',
+        policyId: 'policy-1',
+        reason: 'Amount exceeds threshold',
+      });
+      mockCreatePending.mockResolvedValue({
+        requestId: 'hitl-req-1',
+        status: 'pending',
+        agentId: 'agent-1',
+        credentialId: 'cred-1',
+        action: 'test.get',
+        params: {},
+        target: { url: 'https://api.example.com/data', method: 'GET', headers: {} },
+        policyId: 'policy-1',
+        reason: 'Amount exceeds threshold',
+        createdAt: new Date().toISOString(),
+      });
+    });
+
+    it('executes upstream call when HITL is approved', async () => {
+      mockWaitForResolution.mockResolvedValue('approved');
+
+      const result = await executeProxy(makeInput());
+
+      expect(result.outcome).toBe('executed');
+      expect(result.upstream.status).toBe(200);
+      expect(result.meta.hitlRequestId).toBe('hitl-req-1');
+      expect(mockDecrypt).toHaveBeenCalled();
+      expect(mockCallApi).toHaveBeenCalled();
+      expect(mockCommit).toHaveBeenCalled();
+    });
+
+    it('throws ForbiddenError when HITL is denied', async () => {
+      mockWaitForResolution.mockResolvedValue('denied');
+
+      await expect(executeProxy(makeInput())).rejects.toThrow(ForbiddenError);
+      await expect(executeProxy(makeInput())).rejects.toThrow('denied by human reviewer');
+      expect(mockDecrypt).not.toHaveBeenCalled();
+      expect(mockCallApi).not.toHaveBeenCalled();
+    });
+
+    it('throws ForbiddenError on HITL timeout', async () => {
+      mockWaitForResolution.mockResolvedValue('timeout');
+
+      await expect(executeProxy(makeInput())).rejects.toThrow(ForbiddenError);
+      await expect(executeProxy(makeInput())).rejects.toThrow('timed out waiting for human approval');
+      expect(mockDecrypt).not.toHaveBeenCalled();
+      expect(mockCallApi).not.toHaveBeenCalled();
+    });
+
+    it('creates a pending request with correct input', async () => {
+      mockWaitForResolution.mockResolvedValue('approved');
+
+      await executeProxy(makeInput({ params: { amount: 5000 } }));
+
+      expect(mockCreatePending).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentId: 'agent-1',
+          credentialId: 'cred-1',
+          action: 'test.get',
+          params: { amount: 5000 },
+        }),
+        { policyId: 'policy-1', reason: 'Amount exceeds threshold' },
+      );
+    });
+
+    it('fires webhook when agent has callbackUrl', async () => {
+      mockWaitForResolution.mockResolvedValue('approved');
+      mockFindAgent.mockResolvedValue({ id: 'agent-1', callbackUrl: 'https://example.com/hook' });
+
+      const { sendWebhookNotification } = await import('./notifications.js');
+      await executeProxy(makeInput());
+
+      expect(sendWebhookNotification).toHaveBeenCalled();
+    });
+
+    it('does not fire webhook when agent has no callbackUrl', async () => {
+      mockWaitForResolution.mockResolvedValue('approved');
+      mockFindAgent.mockResolvedValue({ id: 'agent-1', callbackUrl: null });
+
+      const { sendWebhookNotification } = await import('./notifications.js');
+      await executeProxy(makeInput());
+
+      expect(sendWebhookNotification).not.toHaveBeenCalled();
+    });
+  });
+
   describe('credential injection', () => {
     it('injects API_KEY as Authorization Bearer header by default', async () => {
       mockDecrypt.mockResolvedValue('sk_test_key');
-      mockFindUnique.mockResolvedValue(makeCredential({ type: 'API_KEY' }));
+      mockFindCredential.mockResolvedValue(makeCredential({ type: 'API_KEY' }));
 
       await executeProxy(makeInput());
 
@@ -190,7 +275,7 @@ describe('executeProxy', () => {
 
     it('injects OAUTH2 as Authorization Bearer header by default', async () => {
       mockDecrypt.mockResolvedValue('oauth_token_123');
-      mockFindUnique.mockResolvedValue(makeCredential({ type: 'OAUTH2' }));
+      mockFindCredential.mockResolvedValue(makeCredential({ type: 'OAUTH2' }));
 
       await executeProxy(makeInput());
 
@@ -199,7 +284,7 @@ describe('executeProxy', () => {
     });
 
     it('throws ValidationError for CUSTOM type without injection config', async () => {
-      mockFindUnique.mockResolvedValue(makeCredential({ type: 'CUSTOM' }));
+      mockFindCredential.mockResolvedValue(makeCredential({ type: 'CUSTOM' }));
 
       await expect(executeProxy(makeInput())).rejects.toThrow(ValidationError);
       await expect(executeProxy(makeInput())).rejects.toThrow(

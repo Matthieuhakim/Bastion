@@ -1,4 +1,4 @@
-import type { CredentialType } from '@prisma/client';
+import type { Credential, CredentialType } from '@prisma/client';
 import { prisma } from './db.js';
 import { decryptCredential } from './credentials.js';
 import { evaluateRequest, commitRateLimitAndSpend } from './policyEngine.js';
@@ -6,6 +6,8 @@ import type { EvaluationParams } from './policyEngine.js';
 import { callExternalApi } from './httpClient.js';
 import type { ExternalResponse } from './httpClient.js';
 import { ForbiddenError, ValidationError } from '../errors.js';
+import { createPendingRequest, waitForResolution } from './hitl.js';
+import { sendWebhookNotification, buildWebhookPayload } from './notifications.js';
 
 export interface ProxyTarget {
   url: string;
@@ -35,11 +37,14 @@ export interface ProxyMeta {
   policyDecision: 'ALLOW';
   policyId: string | null;
   durationMs: number;
+  hitlRequestId?: string;
 }
 
-export type ProxyResult =
-  | { outcome: 'executed'; upstream: ExternalResponse; meta: ProxyMeta }
-  | { outcome: 'escalated'; policyId: string | null; reason: string };
+export interface ProxyResult {
+  outcome: 'executed';
+  upstream: ExternalResponse;
+  meta: ProxyMeta;
+}
 
 const BLOCKED_HOSTNAMES = new Set([
   'localhost',
@@ -47,6 +52,8 @@ const BLOCKED_HOSTNAMES = new Set([
   '[::1]',
   '0.0.0.0',
 ]);
+
+const HITL_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
 function validateTargetUrl(url: string): URL {
   let parsed: URL;
@@ -127,6 +134,45 @@ function injectCredential(
   return injectedTarget;
 }
 
+async function executeUpstreamCall(
+  credential: Credential,
+  target: ProxyTarget,
+  injection: InjectionConfig | undefined,
+  timeout: number | undefined,
+  agentId: string,
+  credentialId: string,
+  action: string,
+  params: EvaluationParams,
+  policyId: string | null,
+  start: number,
+  hitlRequestId?: string,
+): Promise<ProxyResult> {
+  // Decrypt credential
+  const credentialValue = await decryptCredential(credentialId);
+
+  // Inject credential into request
+  const injectedTarget = injectCredential(target, credentialValue, credential.type, injection);
+
+  // Call external API
+  const upstream = await callExternalApi(injectedTarget, timeout);
+
+  // Commit rate limit and spend counters (only after successful upstream call)
+  await commitRateLimitAndSpend(agentId, credentialId, params);
+
+  return {
+    outcome: 'executed',
+    upstream,
+    meta: {
+      credentialId,
+      action,
+      policyDecision: 'ALLOW',
+      policyId,
+      durationMs: Date.now() - start,
+      hitlRequestId,
+    },
+  };
+}
+
 export async function executeProxy(input: ProxyExecuteInput): Promise<ProxyResult> {
   const { agentId, credentialId, action, params = {}, target, injection, timeout } = input;
   const start = Date.now();
@@ -152,36 +198,63 @@ export async function executeProxy(input: ProxyExecuteInput): Promise<ProxyResul
     throw new ForbiddenError(evaluation.reason);
   }
 
+  // 4. Handle ESCALATE via HITL gate
   if (evaluation.decision === 'ESCALATE') {
-    return {
-      outcome: 'escalated',
-      policyId: evaluation.policyId,
-      reason: evaluation.reason,
-    };
-  }
+    const pending = await createPendingRequest(
+      { agentId, credentialId, action, params, target, injection, timeout },
+      { policyId: evaluation.policyId, reason: evaluation.reason },
+    );
 
-  // 4. Decrypt credential
-  const credentialValue = await decryptCredential(credentialId);
+    // Fire webhook notification (non-blocking)
+    const agent = await prisma.agent.findUnique({ where: { id: agentId } });
+    if (agent?.callbackUrl) {
+      const payload = buildWebhookPayload(
+        pending.requestId,
+        agentId,
+        action,
+        params,
+        evaluation.reason,
+      );
+      sendWebhookNotification(agent.callbackUrl, payload).catch(() => {});
+    }
 
-  // 5. Inject credential into request
-  const injectedTarget = injectCredential(target, credentialValue, credential.type, injection);
+    // Block until admin approves/denies or timeout
+    const resolution = await waitForResolution(pending.requestId, HITL_TIMEOUT_MS);
 
-  // 6. Call external API
-  const upstream = await callExternalApi(injectedTarget, timeout);
+    if (resolution === 'denied') {
+      throw new ForbiddenError('Request denied by human reviewer');
+    }
+    if (resolution === 'timeout') {
+      throw new ForbiddenError('Request timed out waiting for human approval');
+    }
 
-  // 7. Commit rate limit and spend counters (only after successful upstream call)
-  await commitRateLimitAndSpend(agentId, credentialId, params);
-
-  // 8. Return result
-  return {
-    outcome: 'executed',
-    upstream,
-    meta: {
+    // Approved — continue with upstream call
+    return executeUpstreamCall(
+      credential,
+      target,
+      injection,
+      timeout,
+      agentId,
       credentialId,
       action,
-      policyDecision: 'ALLOW',
-      policyId: evaluation.policyId,
-      durationMs: Date.now() - start,
-    },
-  };
+      params,
+      evaluation.policyId,
+      start,
+      pending.requestId,
+    );
+  }
+
+  // 5. ALLOW — execute upstream call directly
+  return executeUpstreamCall(
+    credential,
+    target,
+    injection,
+    timeout,
+    agentId,
+    credentialId,
+    action,
+    params,
+    evaluation.policyId,
+    start,
+  );
 }

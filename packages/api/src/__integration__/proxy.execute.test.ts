@@ -179,13 +179,32 @@ describe('POST /v1/proxy/execute', () => {
       expect(mockFetch).not.toHaveBeenCalled();
     });
 
-    it('returns 202 when policy triggers escalation', async () => {
+    it('returns 403 on escalation timeout (HITL gate)', async () => {
       const agent = await createTestAgent();
       const credential = await createTestCredential(agent.id);
       await createTestPolicy(agent.id, credential.id, {
         allowedActions: ['charges.*'],
         requiresApprovalAbove: 1000,
       });
+
+      // The proxy will block waiting for HITL approval, but the
+      // waitForResolution timeout is internal (5 min default).
+      // For this test, we mock the HITL service to return timeout immediately.
+      // Full HITL integration is tested in hitl.test.ts.
+      const hitlModule = await import('../services/hitl.js');
+      vi.spyOn(hitlModule, 'createPendingRequest').mockResolvedValue({
+        requestId: 'test-hitl-req',
+        status: 'pending',
+        agentId: agent.id,
+        credentialId: credential.id,
+        action: 'charges.create',
+        params: { amount: 5000 },
+        target: { url: 'https://api.stripe.com/v1/charges', method: 'POST', headers: {} },
+        policyId: null,
+        reason: 'Amount exceeds threshold',
+        createdAt: new Date().toISOString(),
+      });
+      vi.spyOn(hitlModule, 'waitForResolution').mockResolvedValue('timeout');
 
       const res = await agentAuthed('post', '/v1/proxy/execute', agent.agentSecret).send({
         credentialId: credential.id,
@@ -194,10 +213,8 @@ describe('POST /v1/proxy/execute', () => {
         target: { url: 'https://api.stripe.com/v1/charges', method: 'POST' },
       });
 
-      expect(res.status).toBe(202);
-      expect(res.body.decision).toBe('ESCALATE');
-      expect(res.body.reason).toContain('approval threshold');
-      expect(res.body.message).toBe('Request requires human approval');
+      expect(res.status).toBe(403);
+      expect(res.body.error.message).toContain('timed out waiting for human approval');
       expect(mockFetch).not.toHaveBeenCalled();
     });
   });

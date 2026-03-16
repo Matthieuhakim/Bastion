@@ -51,3 +51,7 @@ export async function getDailySpend(policyId: string, dateKey: string): Promise<
   const val = await redis.get(key);
   return val ? parseFloat(val) : 0;
 }
+
+export function createSubscriberConnection(): Redis {
+  return new Redis(config.redisUrl);
+}
