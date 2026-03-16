@@ -46,15 +46,19 @@ function validateCreateInput(body: Record<string, unknown>): agentService.Create
 }
 
 // POST /v1/agents/register — Public self-registration endpoint
-agentRegistrationRouter.post('/register', registrationLimiter, async (req: Request, res: Response) => {
-  const input = validateCreateInput(req.body);
-  const { agent, agentSecret } = await agentService.createAgent(input);
+agentRegistrationRouter.post(
+  '/register',
+  registrationLimiter,
+  async (req: Request, res: Response) => {
+    const input = validateCreateInput(req.body);
+    const { agent, agentSecret } = await agentService.createAgent(input);
 
-  res.status(201).json({
-    ...serializeAgent(agent),
-    agentSecret,
-  });
-});
+    res.status(201).json({
+      ...serializeAgent(agent),
+      agentSecret,
+    });
+  },
+);
 
 // POST /v1/agents — Create agent
 agentRouter.post('/', async (req: Request, res: Response) => {
