@@ -3,12 +3,13 @@ import { errorHandler } from './errorHandler.js';
 import { AppError, NotFoundError, ValidationError } from '../errors.js';
 
 function createMocks() {
-  const req = {} as Request;
+  const req = { method: 'GET', originalUrl: '/test' } as Request;
   const json = vi.fn();
   const status = vi.fn().mockReturnValue({ json });
-  const res = { status } as unknown as Response;
+  const getHeader = vi.fn().mockReturnValue('req-123');
+  const res = { status, getHeader } as unknown as Response;
   const next = vi.fn() as NextFunction;
-  return { req, res, next, status, json };
+  return { req, res, next, status, json, getHeader };
 }
 
 describe('errorHandler', () => {
@@ -60,7 +61,7 @@ describe('errorHandler', () => {
 
     errorHandler(err, req, res, next);
 
-    expect(spy).toHaveBeenCalledWith('Unhandled error:', err);
+    expect(spy).toHaveBeenCalled();
 
     vi.restoreAllMocks();
   });
@@ -68,11 +69,13 @@ describe('errorHandler', () => {
   it('does not log to console.error for non-500 errors', () => {
     const { req, res, next } = createMocks();
     const err = new AppError('bad request', 400);
-    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     errorHandler(err, req, res, next);
 
-    expect(spy).not.toHaveBeenCalled();
+    expect(errorSpy).not.toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalled();
 
     vi.restoreAllMocks();
   });

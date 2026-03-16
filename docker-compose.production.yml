@@ -1,0 +1,57 @@
+services:
+  bastion:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    init: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://bastion:${POSTGRES_PASSWORD}@postgres:5432/bastion
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      MASTER_KEY: ${MASTER_KEY}
+      PROJECT_API_KEY: ${PROJECT_API_KEY}
+      BASE_URL: ${BASE_URL}
+      CORS_ORIGINS: ${CORS_ORIGINS}
+    ports:
+      - '3000:3000'
+
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: bastion
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: bastion
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U bastion -d bastion']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    command: >
+      sh -c 'redis-server --appendonly yes --requirepass "$REDIS_PASSWORD"'
+    healthcheck:
+      test: ['CMD-SHELL', 'redis-cli -a "$REDIS_PASSWORD" ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - redisdata:/data
+
+volumes:
+  pgdata:
+  redisdata:

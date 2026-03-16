@@ -1,5 +1,6 @@
 import { config } from '../config.js';
 import type { EvaluationParams } from './policyEngine.js';
+import { logger } from './logger.js';
 
 export interface WebhookPayload {
   requestId: string;
@@ -44,7 +45,11 @@ export async function sendWebhookNotification(
       signal: controller.signal,
     });
   } catch (err) {
-    console.error(`HITL webhook notification failed for ${payload.requestId}:`, err);
+    logger.error('HITL webhook notification failed', {
+      requestId: payload.requestId,
+      callbackUrl,
+      error: err instanceof Error ? err.message : String(err),
+    });
   } finally {
     clearTimeout(timer);
   }

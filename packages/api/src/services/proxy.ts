@@ -9,6 +9,7 @@ import { ForbiddenError, ValidationError } from '../errors.js';
 import { createPendingRequest, waitForResolution } from './hitl.js';
 import { sendWebhookNotification, buildWebhookPayload } from './notifications.js';
 import { appendAuditRecord } from './auditChain.js';
+import { logger } from './logger.js';
 
 export interface ProxyTarget {
   url: string;
@@ -65,7 +66,7 @@ async function appendAuditRecordSafely(
   try {
     await appendAuditRecord(input);
   } catch (error) {
-    console.error('Failed to append audit record:', error);
+    logger.error('Failed to append audit record', error instanceof Error ? error : { error });
   }
 }
 

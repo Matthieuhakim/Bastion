@@ -2,9 +2,11 @@ import { Router } from 'express';
 import type { Request, Response } from 'express';
 import type { Agent } from '@prisma/client';
 import { requireAdmin } from '../middleware/auth.js';
+import { registrationLimiter } from '../middleware/rateLimit.js';
 import { ValidationError } from '../errors.js';
 import * as agentService from '../services/agents.js';
 
+export const agentRegistrationRouter = Router();
 export const agentRouter = Router();
 
 agentRouter.use(requireAdmin);
@@ -42,6 +44,17 @@ function validateCreateInput(body: Record<string, unknown>): agentService.Create
     callbackUrl: callbackUrl as string | undefined,
   };
 }
+
+// POST /v1/agents/register — Public self-registration endpoint
+agentRegistrationRouter.post('/register', registrationLimiter, async (req: Request, res: Response) => {
+  const input = validateCreateInput(req.body);
+  const { agent, agentSecret } = await agentService.createAgent(input);
+
+  res.status(201).json({
+    ...serializeAgent(agent),
+    agentSecret,
+  });
+});
 
 // POST /v1/agents — Create agent
 agentRouter.post('/', async (req: Request, res: Response) => {

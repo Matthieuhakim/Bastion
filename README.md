@@ -200,9 +200,10 @@ Options: `header`, `query` (appends to URL), or `body` (adds a field to the requ
 
 ## Roadmap
 
-See [ROADMAP.md](ROADMAP.md) for the full plan. Coming next:
+See [ROADMAP.md](ROADMAP.md) for the full plan. Current status:
 
-- **Demo + Polish** — end-to-end demo scenario, CLI verification tool, documentation
+- **Phase 9 complete** — production deployment hardening, Docker packaging, and agent self-registration
+- **Next up: Phase 10** — real-time updates and dashboard policy management
 
 ## SDKs
 
@@ -273,6 +274,46 @@ npm run db:migrate       # Run Prisma migrations
 npm run db:studio        # Open Prisma Studio
 ```
 
+## Self-Hosted Deployment
+
+For a production-style deployment, Bastion now ships with a multi-stage `Dockerfile` and
+`docker-compose.production.yml`.
+
+1. Create a `.env.production` file in the repo root with production values:
+
+```env
+MASTER_KEY=<64-char hex>
+PROJECT_API_KEY=<admin key>
+POSTGRES_PASSWORD=<strong password>
+REDIS_PASSWORD=<strong password>
+BASE_URL=https://your-domain.com
+CORS_ORIGINS=https://your-domain.com
+```
+
+1. Start the production stack:
+
+```bash
+docker compose -f docker-compose.production.yml --env-file .env.production up -d --build
+```
+
+1. Verify the deployment:
+
+```bash
+curl http://localhost:3000/health
+curl http://localhost:3000/health/live
+curl -s http://localhost:3000/ | head -5
+```
+
+The production container serves both the API and the built dashboard on port `3000`.
+
+You can also let agents self-register without the admin API key:
+
+```bash
+curl -X POST http://localhost:3000/v1/agents/register \
+  -H "Content-Type: application/json" \
+  -d '{"name": "My Agent"}'
+```
+
 ## Tech Stack
 
 | Component  | Technology                     |
@@ -282,6 +323,11 @@ npm run db:studio        # Open Prisma Studio
 | Cache      | Redis 7                        |
 | ORM        | Prisma 6                       |
 | Encryption | AES-256-GCM, Ed25519           |
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for local setup, testing commands, code conventions, and
+PR expectations.
 
 ## License
 

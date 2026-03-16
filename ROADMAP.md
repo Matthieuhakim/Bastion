@@ -492,30 +492,105 @@ curl http://localhost:3000/v1/audit/verify?agentId=... \
 
 ---
 
-## Phase 9: Demo + Polish
+## Phase 9: Production Deployment & Open Source Launch
 
-**Goal:** End-to-end demo scenario, documentation, video.
+**Goal:** Make Bastion production-deployable and open-source-ready. Containerize, harden config, add agent self-registration.
 
 **Depends on:** All previous phases
 
 ### Steps
 
-- [ ] **9.1 Demo scenario setup**
-  - Agent 1: "Shopping Assistant" with Stripe test mode
-  - Agent 2: "Research Agent" with GitHub API
-  - Pre-configured policies with various constraints
+- [x] **9.1 Config hardening**
+  - Validate `MASTER_KEY` format at startup (fail fast, not at first encrypt)
+  - Add `CORS_ORIGINS` env var (comma-separated origins; defaults to `BASE_URL` in production, `*` in dev)
+  - Warn if `BASE_URL` contains `localhost` in production
 
-- [ ] **9.2 Demo script**
-  - ALLOW → DENY → ESCALATE → approve → verify chain → tamper → detect
+- [x] **9.2 Deep health check + graceful shutdown**
+  - `/health` verifies DB (`SELECT 1`) and Redis (`PING`), returns 200 or 503
+  - `/health/live` — simple liveness probe (always 200, no DB check)
+  - SIGTERM/SIGINT handlers: stop accepting connections, drain in-flight requests, disconnect DB/Redis
 
-- [ ] **9.3 CLI verification tool**
-  - `npx bastion verify --agent <id>` — standalone chain verifier
-  - Pretty-printed output with colors
+- [x] **9.3 CORS lockdown + dashboard serving**
+  - Configure CORS from `CORS_ORIGINS` env var (no more `cors()` with no options)
+  - In production: serve built dashboard as static files from Express (no separate Vite server)
+  - SPA fallback: non-API routes serve `index.html`
 
-- [ ] **9.4 Documentation**
-  - Quickstart guide
-  - API reference
-  - Architecture overview with diagrams
+- [x] **9.4 Dockerfile + production Docker Compose**
+  - Multi-stage Dockerfile: deps → build (API + Dashboard) → lean runtime
+  - `docker-compose.production.yml` with Redis auth, healthchecks, secrets via env vars
+  - `.dockerignore` for clean builds
+
+- [x] **9.5 Structured logging**
+  - Zero-dependency JSON logger for production, human-readable for development
+  - Replace `console.log`/`console.error` across API codebase
+
+- [x] **9.6 Open source polish**
+  - `CONTRIBUTING.md` — dev setup, testing, code conventions, PR guidelines
+  - README: self-hosted deployment section with `docker-compose.production.yml` instructions
+
+- [x] **9.7 Agent self-registration**
+  - `POST /v1/agents/register` — public (no auth), rate-limited (10/IP/hour)
+  - Returns agent ID + secret (shown once). No email/OAuth for MVP
+  - Admins can still deactivate rogue agents via kill-switch
+
+### Key files to create/modify
+
+- `packages/api/src/config.ts` — env var validation, CORS config
+- `packages/api/src/index.ts` — graceful shutdown
+- `packages/api/src/app.ts` — CORS + static dashboard serving
+- `packages/api/src/routes/health.ts` — deep health check
+- `packages/api/src/services/logger.ts` — structured logging (new)
+- `packages/api/src/middleware/rateLimit.ts` — registration rate limiter (new)
+- `packages/api/src/routes/agents.ts` — self-registration endpoint
+- `Dockerfile`, `.dockerignore`, `docker-compose.production.yml` (new)
+- `CONTRIBUTING.md` (new)
+
+### Verification
+
+```bash
+# Build and run production stack
+docker compose -f docker-compose.production.yml --env-file .env.production up -d --build
+
+# Deep health check
+curl http://localhost:3000/health
+# → { "status": "ok", "checks": { "database": "ok", "redis": "ok" } }
+
+# Dashboard served from Express
+curl -s http://localhost:3000/ | head -5
+# → <!DOCTYPE html>...
+
+# Self-register an agent
+curl -X POST http://localhost:3000/v1/agents/register \
+  -H "Content-Type: application/json" \
+  -d '{"name": "My Agent"}'
+# → { "id": "...", "agentSecret": "bst_...", "publicKey": "...", "keyFingerprint": "..." }
+
+# Existing tests still pass
+npm test && npm run lint
+```
+
+---
+
+## Phase 10: Real-Time & Policy Management (planned)
+
+**Goal:** WebSocket real-time updates and policy management in the dashboard.
+
+**Depends on:** Phase 9
+
+### Steps
+
+- [ ] **10.1 WebSocket server**
+  - Real-time HITL notifications (replace polling)
+  - Live audit log feed
+  - Agent status change broadcasts
+
+- [ ] **10.2 Policy management page**
+  - Policy list with inline editing (actions, constraints, thresholds)
+  - Create/delete policies from the dashboard
+
+- [ ] **10.3 Slack integration**
+  - Slack Incoming Webhook for HITL notifications
+  - Slack Interactive Components for approve/deny buttons
 
 ---
 
@@ -547,7 +622,10 @@ Phase 7 (SDKs) ✅
 Phase 8 (Dashboard) ✅
     │
     v
-Phase 9 (Demo)
+Phase 9 (Production) ✅
+    │
+    v
+Phase 10 (Real-Time + Policies)
 ```
 
 ---
@@ -561,5 +639,6 @@ Phase 9 (Demo)
 | 3     | `ioredis`              | Redis client for rate limits     |
 | 3     | `luxon`                | Timezone-aware time window eval  |
 | 5     | `@slack/web-api`       | Slack notifications (stretch)    |
+| 9     | `express-rate-limit`   | Registration endpoint rate limit |
 
 All other crypto (AES-256-GCM, HKDF) uses Node.js built-in `crypto` module.

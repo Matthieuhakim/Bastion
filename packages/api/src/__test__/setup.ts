@@ -2,3 +2,4 @@ process.env['DATABASE_URL'] = 'postgresql://bastion:bastion@localhost:5432/basti
 process.env['PROJECT_API_KEY'] = 'test-project-api-key';
 process.env['MASTER_KEY'] = 'a'.repeat(64);
 process.env['NODE_ENV'] = 'test';
+process.env['BASE_URL'] = 'http://localhost:3000';
