@@ -15,6 +15,8 @@ See `ROADMAP.md` for the phased implementation plan with dependencies and verifi
 
 ## Commands
 
+Requires Node.js >= 22.
+
 ```bash
 npm run dev          # Start API server (tsx watch mode on packages/api)
 npm run build        # Build all TypeScript workspace packages
@@ -33,6 +35,14 @@ Build/lint/format target all workspaces via npm `--workspaces` flag. To target a
 ```bash
 npm run build --workspace=packages/api
 npm run build --workspace=packages/sdk-node
+```
+
+Run a single test file or use watch mode (from repo root):
+
+```bash
+npx vitest run src/services/crypto.test.ts --config packages/api/vitest.config.ts
+npm run test:watch --workspace=packages/api  # re-runs on file changes
+npm run test:all --workspace=packages/api    # unit + integration in one go
 ```
 
 ## Architecture
@@ -59,9 +69,22 @@ Monorepo with npm workspaces. Three packages:
 
 `helmet` → `cors` → `express.json` → `requestId` → `router` → `errorHandler`
 
+### Request → Route → Service pattern
+
+Routes validate input and handle HTTP concerns, then delegate to service functions. Services contain business logic and throw typed errors (`ValidationError`, `NotFoundError`, etc.) which `errorHandler` catches and serializes into JSON responses. Express `Request` is augmented with an optional `agent` property (`src/types/index.ts`) — set by `requireAgent` middleware for agent-authenticated routes.
+
 ### Database
 
-Prisma 6 with PostgreSQL. Schema at `packages/api/prisma/schema.prisma`. Prisma models use `@map` for snake_case column names and `@@map` for table names, while TypeScript uses camelCase.
+Prisma 6 with PostgreSQL. Schema at `packages/api/prisma/schema.prisma`. Prisma models use `@map` for snake_case column names and `@@map` for table names, while TypeScript uses camelCase. New models must follow this convention.
+
+### Testing
+
+Two-tier test setup in `packages/api/`:
+
+- **Unit tests** — collocated as `*.test.ts` next to source files. No DB needed. Run with `npm test`.
+- **Integration tests** — in `src/__integration__/`. Require Docker postgres running. Use a separate `bastion_test` database (created automatically by the global setup file).
+
+Both tiers use `supertest` against `createApp()` directly — no HTTP server is started. Setup files (`src/__test__/setup.ts`, `setup.integration.ts`) configure env vars. Integration tests clean the DB between runs via `src/__test__/helpers/db.ts`.
 
 ## Code Conventions
 
@@ -70,6 +93,7 @@ Prisma 6 with PostgreSQL. Schema at `packages/api/prisma/schema.prisma`. Prisma 
 - **Formatting**: single quotes, semicolons, trailing commas, 100 char print width (see `.prettierrc`).
 - **Unused variables/params**: prefix with `_` (e.g., `_req`, `_next`) — the ESLint config allows `argsIgnorePattern: '^_'` and `varsIgnorePattern: '^_'`.
 - **Crypto**: `@noble/ed25519` and `@noble/hashes` for signing/hashing. Node.js built-in `crypto` for AES-256-GCM and HKDF. No other crypto libraries.
+- **API secrets**: prefixed with `bst_` (+ 32 random hex bytes) for easy identification.
 - **Fail closed**: if Bastion is down or policy evaluation fails, requests are denied, never silently allowed.
 
 ## Environment Variables
