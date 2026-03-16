@@ -438,7 +438,7 @@ curl http://localhost:3000/v1/audit/verify?agentId=... \
 
 ### Steps
 
-- [ ] **7.1 TypeScript SDK**
+- [x] **7.1 TypeScript SDK**
   - `client.execute({ credential, action, target })` — proxy mode
   - `client.listAgents()`, `client.getAgent(id)`
   - `client.listCredentials()`, `client.storeCredential(...)`
@@ -446,13 +446,13 @@ curl http://localhost:3000/v1/audit/verify?agentId=... \
   - `client.verifyChain(agentId)` — audit verification
   - Error handling: typed errors for DENY, ESCALATE_TIMEOUT, etc.
 
-- [ ] **7.2 Python SDK**
+- [x] **7.2 Python SDK**
   - Mirror the TypeScript SDK methods
   - Both sync (`httpx.Client`) and async (`httpx.AsyncClient`) variants
   - `client.execute(credential, action, target)` — proxy mode
   - `client.verify_chain(agent_id)` — audit verification
 
-- [ ] **7.3 SDK documentation**
+- [x] **7.3 SDK documentation**
   - Inline docstrings/JSDoc
   - Usage examples in each SDK README
 
@@ -539,7 +539,7 @@ Phase 4 (Proxy) ✅ ────┤ ←── audit integrated into proxy
 Phase 5 (HITL) ✅ ─────┘
     │
     v
-Phase 7 (SDKs)
+Phase 7 (SDKs) ✅
     │
     v
 Phase 8 (Dashboard)

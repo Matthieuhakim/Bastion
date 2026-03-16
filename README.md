@@ -200,8 +200,53 @@ Options: `header`, `query` (appends to URL), or `body` (adds a field to the requ
 
 See [ROADMAP.md](ROADMAP.md) for the full plan. Coming next:
 
-- **SDKs** — full TypeScript and Python client libraries
 - **Dashboard** — web UI for monitoring agents, approving requests, viewing audit logs
+
+## SDKs
+
+### TypeScript
+
+```bash
+npm install @bastion/sdk-node
+```
+
+```typescript
+import { BastionClient } from '@bastion/sdk-node';
+
+const client = new BastionClient({
+  baseUrl: 'http://localhost:3000',
+  apiKey: agentSecret,
+});
+
+const result = await client.execute({
+  credentialId: '<credential_id>',
+  action: 'charges.create',
+  params: { amount: 50 },
+  target: { url: 'https://api.stripe.com/v1/charges', method: 'POST', body: { amount: 5000, currency: 'usd' } },
+});
+```
+
+See [packages/sdk-node/README.md](packages/sdk-node/README.md) for full documentation.
+
+### Python
+
+```bash
+pip install bastion-sdk
+```
+
+```python
+from bastion_sdk import BastionClient
+
+with BastionClient("http://localhost:3000", api_key=agent_secret) as client:
+    result = client.execute(
+        credential_id="<credential_id>",
+        action="charges.create",
+        params={"amount": 50},
+        target={"url": "https://api.stripe.com/v1/charges", "method": "POST", "body": {"amount": 5000, "currency": "usd"}},
+    )
+```
+
+Both sync and async clients available. See [packages/sdk-python/README.md](packages/sdk-python/README.md) for full documentation.
 
 ## Project Structure
 
