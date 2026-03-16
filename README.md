@@ -1,116 +1,222 @@
 # Bastion
 
-**The trust proxy for AI agents.** Enforce real-time policies on every credentialed action an AI agent takes, with human-in-the-loop escalation and a cryptographically signed audit trail.
+**The trust proxy for AI agents.** Bastion sits between your AI agents and the APIs they call — holding credentials, enforcing policies, and logging every decision.
 
-> Keep your AI agents under control. Prove it.
+> Your agent needs a Stripe key to process refunds. But a raw API key means it could charge $1M or delete every customer. Bastion gives agents access to APIs without giving them the keys.
 
-## What Bastion Does
-
-Bastion sits between your AI agents and the APIs they call. It:
-
-1. **Holds credentials** — agents never touch raw API keys or tokens
-2. **Enforces policies** — attribute-based access control (ABAC) on every request (amount limits, time windows, rate limits, allowed actions)
-3. **Escalates to humans** — pauses high-stakes requests and notifies you via Slack/webhook for approval
-4. **Proves everything** — every decision is Ed25519-signed into a tamper-evident hash chain that anyone can independently verify
-
-## Current Status
-
-**Early development.** The project scaffolding and API server are in place. Core features (credential vault, policy engine, HITL gate, signed audit chain) are being built incrementally.
-
-### What's working now
-
-- Express 5 API server with health check endpoint
-- **Agent registration** with Ed25519 keypair generation (`POST /v1/agents`)
-- **Agent CRUD** — list, get, update, soft-delete agents
-- **Admin auth** — `PROJECT_API_KEY` protects management routes (timing-safe comparison)
-- **Agent auth middleware** — agents authenticate via `Bearer <agent_secret>` (SHA-256 hashed, never stored plaintext)
-- **Credential Vault** — envelope encryption (AES-256-GCM + HKDF), per-credential DEKs, raw values never returned over the API
-- **Credential CRUD** — store, list, get, and revoke credentials (`/v1/credentials`)
-- **Policy Engine (ABAC)** — attribute-based access control with wildcard action matching, amount limits, rate limits (Redis), timezone-aware time windows (Luxon), IP allowlists, and approval thresholds
-- **Policy CRUD** — create, list, get, update, and deactivate policies (`/v1/policies`)
-- **Policy evaluation** — dry-run endpoint (`POST /v1/policies/evaluate`) returns ALLOW / DENY / ESCALATE with reason; fail-closed (no policy = deny)
-- **Proxy Mode** — `POST /v1/proxy/execute` (agent auth): validates credential ownership, evaluates policy, decrypts credential, injects it into the outbound request, calls the external API, and returns the result. Supports configurable credential injection (header, query param, body field), SSRF protection, and timeout handling. ESCALATE returns 202 for human-in-the-loop approval (Phase 5).
-- Prisma schema with Agent, Credential, and Policy models
-- TypeScript and Python SDK stubs
-- Local dev environment via Docker Compose (PostgreSQL + Redis)
-
-## Project Structure
+## How It Works
 
 ```text
-packages/
-  api/          → Express 5 + TypeScript API server
-  sdk-node/     → TypeScript SDK (zero runtime dependencies)
-  sdk-python/   → Python SDK (httpx)
+┌─────────────┐         ┌──────────────────────────────┐         ┌──────────────┐
+│             │         │           Bastion             │         │              │
+│  Your Agent │──req──▶ │  policy ─▶ decrypt ─▶ inject  │──req──▶ │ External API │
+│             │◀─res──  │         ◀── response ◀──      │◀─res──  │ (Stripe etc) │
+└─────────────┘         └──────────────────────────────┘         └──────────────┘
+                            ▲             ▲
+                        credential     policy rules
+                        vault          (ABAC)
 ```
 
-## Getting Started
+1. Your agent sends a request to Bastion: *"I want to charge $50 using credential X"*
+2. Bastion checks the policy — is this agent allowed to do this, at this amount, at this time?
+3. If **ALLOW**: Bastion decrypts the credential from the vault, injects it into the request, calls the external API, and returns the result
+4. If **DENY**: the agent gets a 403 with the reason
+5. If **ESCALATE**: the request is paused for human approval (coming soon)
 
-### Prerequisites
+The agent never sees the raw API key. Bastion handles it server-side and zeroes it from memory after use.
 
-- Node.js >= 22
-- Docker and Docker Compose
-- Python >= 3.10 (for the Python SDK)
+## Quickstart
 
-### Setup
+### 1. Start Bastion
 
 ```bash
-# Clone the repo
 git clone https://github.com/Matthieuhakim/Bastion.git
 cd Bastion
-
-# Install dependencies
 npm install
 
 # Start PostgreSQL and Redis
 docker compose up -d
 
-# Set up environment
+# Configure environment
 cp packages/api/.env.example packages/api/.env
+# Edit .env: set MASTER_KEY (64 hex chars) and PROJECT_API_KEY (your admin key)
 
-# Run database migrations
+# Run migrations and start the server
 npm run db:migrate
-
-# Start the dev server
 npm run dev
 ```
 
-### Verify
+Bastion is now running at `http://localhost:3000`.
+
+### 2. Set up an agent, credential, and policy
+
+Use your `PROJECT_API_KEY` to manage Bastion (replace `$ADMIN_KEY` below):
 
 ```bash
-curl http://localhost:3000/health
-# {"status":"ok","timestamp":"...","version":"0.1.0"}
-```
+# Register an agent
+curl -s -X POST http://localhost:3000/v1/agents \
+  -H "Authorization: Bearer $ADMIN_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Support Bot"}' | jq
 
-### Python SDK (optional)
+# Save the agentSecret from the response — it's shown only once.
+```
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -e packages/sdk-python
+# Store an API key in the vault (it gets encrypted at rest)
+curl -s -X POST http://localhost:3000/v1/credentials \
+  -H "Authorization: Bearer $ADMIN_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Stripe Production",
+    "type": "API_KEY",
+    "value": "sk_live_your_stripe_key",
+    "agentId": "<agent_id>"
+  }' | jq
 ```
 
-## Scripts
+```bash
+# Create a policy: allow charges, block transfers, require approval above $500
+curl -s -X POST http://localhost:3000/v1/policies \
+  -H "Authorization: Bearer $ADMIN_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "agentId": "<agent_id>",
+    "credentialId": "<credential_id>",
+    "allowedActions": ["charges.*"],
+    "deniedActions": ["transfers.*"],
+    "constraints": {
+      "maxAmountPerTransaction": 1000,
+      "maxDailySpend": 5000,
+      "rateLimit": {"maxRequests": 100, "windowSeconds": 3600}
+    },
+    "requiresApprovalAbove": 500
+  }' | jq
+```
 
-| Command                    | Description                        |
-| -------------------------- | ---------------------------------- |
-| `npm run dev`              | Start the API server in watch mode |
-| `npm run build`            | Build all TypeScript packages      |
-| `npm run lint`             | Run ESLint                         |
-| `npm run format`           | Format code with Prettier          |
-| `npm test`                 | Run unit tests (Vitest)            |
-| `npm run test:integration` | Run integration tests (needs DB)   |
-| `npm run db:migrate`       | Run Prisma migrations              |
-| `npm run db:studio`        | Open Prisma Studio                 |
+### 3. Integrate your agent
+
+Your agent authenticates with its own secret and calls `POST /v1/proxy/execute`. Here's all it takes:
+
+**Using fetch / any HTTP client:**
+
+```typescript
+const response = await fetch('http://localhost:3000/v1/proxy/execute', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${agentSecret}`,
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    credentialId: '<credential_id>',
+    action: 'charges.create',
+    params: { amount: 50 },
+    target: {
+      url: 'https://api.stripe.com/v1/charges',
+      method: 'POST',
+      body: { amount: 5000, currency: 'usd' },
+    },
+  }),
+});
+
+const result = await response.json();
+// result.upstream.status  → 200
+// result.upstream.body    → Stripe's response
+// result.meta.policyDecision → "ALLOW"
+```
+
+**Using curl:**
+
+```bash
+curl -X POST http://localhost:3000/v1/proxy/execute \
+  -H "Authorization: Bearer <agent_secret>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "credentialId": "<credential_id>",
+    "action": "charges.create",
+    "params": {"amount": 50},
+    "target": {
+      "url": "https://api.stripe.com/v1/charges",
+      "method": "POST",
+      "body": {"amount": 5000, "currency": "usd"}
+    }
+  }'
+```
+
+The request body has three parts:
+
+- **`credentialId`** — which vault credential to use (the agent never sees the raw key)
+- **`action`** + **`params`** — what the agent wants to do, evaluated against the policy
+- **`target`** — the external API call Bastion will make on the agent's behalf
+
+### Credential injection
+
+By default, `API_KEY` and `OAUTH2` credentials are injected as `Authorization: Bearer <key>`. You can override this:
+
+```json
+{
+  "injection": { "location": "header", "key": "X-Api-Key" }
+}
+```
+
+Options: `header`, `query` (appends to URL), or `body` (adds a field to the request body).
+
+## Features
+
+**Credential Vault** — Envelope encryption (AES-256-GCM + HKDF). Each credential gets its own data encryption key. Raw values are never returned over the API or stored in logs.
+
+**Policy Engine (ABAC)** — Fine-grained rules per agent and credential:
+
+- Allowed/denied actions with wildcard matching (`charges.*`)
+- Amount limits (per-transaction and daily spend)
+- Rate limiting (Redis-backed)
+- Time windows (timezone-aware)
+- IP allowlists
+- Approval thresholds (triggers ESCALATE)
+
+**Proxy Mode** — The core flow: authenticate agent, evaluate policy, decrypt credential, inject it into the outbound request, call the external API, return the result. Includes SSRF protection (blocks localhost, cloud metadata endpoints).
+
+**Fail closed** — No policy for an agent+credential pair = DENY. Bastion never silently allows a request.
+
+## Roadmap
+
+See [ROADMAP.md](ROADMAP.md) for the full plan. Coming next:
+
+- **Human-in-the-Loop Gate** — pause ESCALATE requests, notify via Slack/webhook, approve or deny
+- **Signed Audit Chain** — Ed25519-signed, SHA-256 hash-chained records for every decision
+- **SDKs** — full TypeScript and Python client libraries
+- **Dashboard** — web UI for monitoring agents, approving requests, viewing audit logs
+
+## Project Structure
+
+```text
+packages/
+  api/          Express 5 + TypeScript API server (the core)
+  sdk-node/     TypeScript SDK (zero runtime deps)
+  sdk-python/   Python SDK (httpx)
+```
+
+## Development
+
+```bash
+npm run dev              # Start API server (watch mode)
+npm run build            # Build all packages
+npm run lint             # ESLint
+npm test                 # Unit tests (no DB needed)
+npm run test:integration # Integration tests (needs Docker)
+npm run db:migrate       # Run Prisma migrations
+npm run db:studio        # Open Prisma Studio
+```
 
 ## Tech Stack
 
-| Component  | Technology                         |
-| ---------- | ---------------------------------- |
-| API server | Express 5, TypeScript, Node.js     |
-| Database   | PostgreSQL 17                      |
-| Cache      | Redis 7                            |
-| ORM        | Prisma 6                           |
-| SDKs       | TypeScript (fetch), Python (httpx) |
+| Component  | Technology                     |
+| ---------- | ------------------------------ |
+| API server | Express 5, TypeScript, Node 22 |
+| Database   | PostgreSQL 17                  |
+| Cache      | Redis 7                        |
+| ORM        | Prisma 6                       |
+| Encryption | AES-256-GCM, Ed25519           |
 
 ## License
 
