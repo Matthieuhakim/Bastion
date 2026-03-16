@@ -210,11 +210,11 @@ See [ROADMAP.md](ROADMAP.md) for the full plan. Current status:
 ### TypeScript
 
 ```bash
-npm install @bastion/sdk-node
+npm install @bastion-ai/sdk
 ```
 
 ```typescript
-import { BastionClient } from '@bastion/sdk-node';
+import { BastionClient } from '@bastion-ai/sdk';
 
 const client = new BastionClient({
   baseUrl: 'http://localhost:3000',

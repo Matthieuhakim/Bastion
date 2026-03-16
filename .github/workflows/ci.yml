@@ -1,0 +1,114 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  lint-build-test:
+    name: Lint, Build, and Unit Tests
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://bastion:bastion@localhost:5432/bastion_test
+      REDIS_URL: redis://localhost:6379
+      MASTER_KEY: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      PROJECT_API_KEY: test-project-api-key
+      NODE_ENV: test
+      BASE_URL: http://localhost:3000
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check formatting
+        run: npm run format:check
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build workspaces
+        run: npm run build
+
+      - name: Run JavaScript and TypeScript unit tests
+        run: npm test
+
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: bastion
+          POSTGRES_PASSWORD: bastion
+          POSTGRES_DB: bastion
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U bastion -d bastion"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://bastion:bastion@localhost:5432/bastion_test
+      REDIS_URL: redis://localhost:6379
+      MASTER_KEY: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      PROJECT_API_KEY: test-project-api-key
+      NODE_ENV: test
+      BASE_URL: http://localhost:3000
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run integration tests
+        run: npm run test:integration
+
+  sdk-python-tests:
+    name: Python SDK Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python SDK dependencies
+        run: python -m pip install -e "packages/sdk-python[dev]"
+
+      - name: Run Python SDK tests
+        working-directory: packages/sdk-python
+        run: pytest

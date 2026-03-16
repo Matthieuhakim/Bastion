@@ -1,0 +1,57 @@
+name: Bug report
+description: Report a reproducible problem in Bastion
+title: '[Bug]: '
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a bug report. Please include enough detail for someone else to reproduce it.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: Describe the bug and what you expected to happen instead.
+      placeholder: A short, clear description of the problem.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Share exact steps, commands, or code snippets.
+      placeholder: |
+        1. Start the API with ...
+        2. Send a request to ...
+        3. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant output
+      description: Paste logs, stack traces, screenshots, or curl output if helpful.
+      render: shell
+
+  - type: input
+    id: version
+    attributes:
+      label: Bastion version or commit
+      description: Which version, branch, or commit are you using?
+      placeholder: v0.1.0 or commit SHA
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Tell us about your setup.
+      placeholder: |
+        OS:
+        Node.js:
+        Python:
+        Docker:
+        Deployment mode:

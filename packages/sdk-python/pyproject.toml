@@ -9,9 +9,29 @@ description = "Python SDK for the Bastion trust proxy"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
+authors = [
+    { name = "Matthieu Hakim" },
+]
+keywords = ["ai", "agents", "security", "proxy", "audit", "python"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
 dependencies = [
     "httpx>=0.27.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/Matthieuhakim/Bastion"
+Repository = "https://github.com/Matthieuhakim/Bastion"
+Issues = "https://github.com/Matthieuhakim/Bastion/issues"
 
 [project.optional-dependencies]
 dev = [

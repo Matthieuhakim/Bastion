@@ -1,11 +1,11 @@
-# @bastion/sdk-node
+# @bastion-ai/sdk
 
 TypeScript SDK for the [Bastion](../../README.md) trust proxy. Zero runtime dependencies — uses the global `fetch` API.
 
 ## Installation
 
 ```bash
-npm install @bastion/sdk-node
+npm install @bastion-ai/sdk
 ```
 
 Requires Node.js 22+ (for native `fetch`).
@@ -13,7 +13,7 @@ Requires Node.js 22+ (for native `fetch`).
 ## Quick Start
 
 ```typescript
-import { BastionClient } from '@bastion/sdk-node';
+import { BastionClient } from '@bastion-ai/sdk';
 
 const client = new BastionClient({
   baseUrl: 'http://localhost:3000',
@@ -150,7 +150,7 @@ const verification = await client.verifyChain(agent.id);
 All API errors throw typed exceptions:
 
 ```typescript
-import { BastionForbiddenError, BastionNotFoundError } from '@bastion/sdk-node';
+import { BastionForbiddenError, BastionNotFoundError } from '@bastion-ai/sdk';
 
 try {
   await agentClient.execute({ ... });
@@ -162,7 +162,7 @@ try {
 ```
 
 | Error Class | Status | When |
-|------------|--------|------|
+| ------------ | ------ | ---- |
 | `BastionValidationError` | 400 | Invalid input |
 | `BastionUnauthorizedError` | 401 | Bad or missing auth |
 | `BastionForbiddenError` | 403 | Policy DENY or HITL timeout |
