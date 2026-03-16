@@ -471,22 +471,24 @@ curl http://localhost:3000/v1/audit/verify?agentId=... \
 
 ### Steps
 
-- [ ] **8.1 Next.js project setup**
-  - `packages/dashboard/` — Next.js + React
-  - Tailwind CSS for styling
-  - API client connecting to Bastion API
+- [x] **8.1 Vite + React project setup**
+  - `packages/dashboard/` — Vite + React SPA
+  - Tailwind CSS v4 for styling
+  - TanStack Query for data fetching + polling
+  - React Router v7 for client-side routing
+  - Vite dev proxy to API server
 
-- [ ] **8.2 Pages**
+- [x] **8.2 Pages**
   - Agent list (with kill switch toggle)
-  - Credential list (masked values, revoke button)
-  - Policy list (with inline editing)
-  - HITL pending queue (approve/deny buttons)
-  - Audit log viewer (filterable, searchable)
-  - Chain verification status
+  - Credential list (masked values, revoke button with confirmation)
+  - HITL pending queue (approve/deny buttons, 5s polling)
+  - Audit log viewer (filterable by agent/action/decision/date, cursor pagination)
+  - Chain verification status (per-agent verify button)
 
-- [ ] **8.3 Real-time updates**
+- [ ] **8.3 Real-time updates (stretch)**
   - WebSocket connection for live audit feed
   - HITL notification badges
+  - Policy list with inline editing
 
 ---
 
@@ -542,7 +544,7 @@ Phase 5 (HITL) ✅ ─────┘
 Phase 7 (SDKs) ✅
     │
     v
-Phase 8 (Dashboard)
+Phase 8 (Dashboard) ✅
     │
     v
 Phase 9 (Demo)

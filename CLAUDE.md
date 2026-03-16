@@ -19,6 +19,7 @@ Requires Node.js >= 22.
 
 ```bash
 npm run dev          # Start API server (tsx watch mode on packages/api)
+npm run dev:dashboard # Start dashboard (Vite dev server on :5173, proxies /v1 to API)
 npm run build        # Build all TypeScript workspace packages
 npm run lint         # ESLint 9 (flat config) across all packages
 npm run format       # Prettier write
@@ -47,9 +48,10 @@ npm run test:all --workspace=packages/api    # unit + integration in one go
 
 ## Architecture
 
-Monorepo with npm workspaces. Three packages:
+Monorepo with npm workspaces. Four packages:
 
 - **`packages/api/`** — Express 5 + TypeScript API server. This is the main codebase.
+- **`packages/dashboard/`** — Vite + React SPA admin dashboard. Uses TanStack Query for data fetching, React Router for routing, Tailwind CSS v4 for styling. Communicates with the API via REST (Vite dev proxy handles `/v1` → `localhost:3000`). Auth is sessionStorage-based `PROJECT_API_KEY`.
 - **`packages/sdk-node/`** — TypeScript SDK. Zero runtime dependencies (uses global `fetch`).
 - **`packages/sdk-python/`** — Python SDK using `httpx`. Not an npm workspace (managed with pip/hatch).
 

@@ -196,11 +196,13 @@ Options: `header`, `query` (appends to URL), or `body` (adds a field to the requ
 
 **Fail closed** — No policy for an agent+credential pair = DENY. Bastion never silently allows a request.
 
+**Dashboard** — Admin web UI for managing agents (kill-switch toggle), approving/denying HITL requests, browsing the audit log with filters, and revoking credentials. Run with `npm run dev:dashboard`.
+
 ## Roadmap
 
 See [ROADMAP.md](ROADMAP.md) for the full plan. Coming next:
 
-- **Dashboard** — web UI for monitoring agents, approving requests, viewing audit logs
+- **Demo + Polish** — end-to-end demo scenario, CLI verification tool, documentation
 
 ## SDKs
 
@@ -253,6 +255,7 @@ Both sync and async clients available. See [packages/sdk-python/README.md](packa
 ```text
 packages/
   api/          Express 5 + TypeScript API server (the core)
+  dashboard/    Vite + React admin dashboard
   sdk-node/     TypeScript SDK (zero runtime deps)
   sdk-python/   Python SDK (httpx)
 ```
@@ -261,6 +264,7 @@ packages/
 
 ```bash
 npm run dev              # Start API server (watch mode)
+npm run dev:dashboard    # Start dashboard (Vite dev server)
 npm run build            # Build all packages
 npm run lint             # ESLint
 npm test                 # Unit tests (no DB needed)
