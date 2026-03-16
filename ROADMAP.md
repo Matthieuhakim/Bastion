@@ -87,7 +87,7 @@ curl http://localhost:3000/health \
 
 ### Steps
 
-- [ ] **2.1 Envelope encryption service**
+- [x] **2.1 Envelope encryption service**
   - Master KEK: derived from `MASTER_KEY` env var using HKDF (SHA-256)
   - Per-credential DEK: random 32 bytes, AES-256-GCM
   - `encrypt(plaintext)` → `{ encryptedBlob, encryptedDek, iv, authTag }`
@@ -95,7 +95,7 @@ curl http://localhost:3000/health \
   - Zero out plaintext buffer after use (`Buffer.fill(0)`)
   - Use Node.js built-in `crypto` module (no external deps)
 
-- [ ] **2.2 Prisma schema for credentials**
+- [x] **2.2 Prisma schema for credentials**
   ```
   Credential {
     id, name, type (API_KEY | OAUTH2 | CUSTOM),
@@ -106,17 +106,17 @@ curl http://localhost:3000/health \
   }
   ```
 
-- [ ] **2.3 Credential CRUD endpoints**
+- [x] **2.3 Credential CRUD endpoints**
   - `POST /v1/credentials` — encrypt + store credential (admin auth)
   - `GET /v1/credentials` — list credentials with masked values (admin auth)
   - `GET /v1/credentials/:id` — get single credential, masked (admin auth)
   - `DELETE /v1/credentials/:id` — revoke credential (set isRevoked = true)
   - Never return raw credential values over the API
 
-- [ ] **2.4 Credential decryption for proxy use (internal only)**
+- [x] **2.4 Credential decryption for proxy use (internal only)**
   - Internal service method: `decryptCredential(credentialId)` → raw value
   - Only called during proxy execution (Phase 4)
-  - Raw value exists in memory only during the API call, then zeroed
+  - Plaintext buffers are zeroed inside the encryption helpers after use
 
 ### Key files to create/modify
 
@@ -124,6 +124,8 @@ curl http://localhost:3000/health \
 - `packages/api/src/services/credentials.ts` — credential CRUD logic
 - `packages/api/src/routes/credentials.ts` — credential REST endpoints
 - `packages/api/prisma/schema.prisma` — add Credential model
+- `packages/api/src/services/encryption.test.ts` — encryption unit coverage
+- `packages/api/src/__integration__/credentials.crud.test.ts` — credential integration coverage
 
 ### Verification
 
@@ -133,11 +135,16 @@ curl -X POST http://localhost:3000/v1/credentials \
   -H "Authorization: Bearer $PROJECT_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"name": "Stripe Test", "type": "API_KEY", "value": "sk_test_abc123", "agentId": "..."}'
-# Should return credential_id with masked value "sk_...c123"
+# Should return a credential record with masked metadata (for example `_displayHint`)
+# and should never return raw values or encrypted fields
 
 # List credentials (should never show raw values)
 curl http://localhost:3000/v1/credentials \
   -H "Authorization: Bearer $PROJECT_API_KEY"
+
+# Automated coverage
+npm run test:integration --workspace=packages/api -- src/__integration__/credentials.crud.test.ts
+npx vitest run src/services/encryption.test.ts --config packages/api/vitest.config.ts
 ```
 
 ---

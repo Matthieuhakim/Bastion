@@ -19,6 +19,33 @@ model Agent {
   isActive            Boolean  @default(true) @map("is_active")
   createdAt           DateTime @default(now()) @map("created_at")
   updatedAt           DateTime @updatedAt @map("updated_at")
+  credentials         Credential[]
 
   @@map("agents")
+}
+
+enum CredentialType {
+  API_KEY
+  OAUTH2
+  CUSTOM
+}
+
+model Credential {
+  id            String         @id @default(uuid())
+  name          String
+  type          CredentialType
+  encryptedBlob Bytes          @map("encrypted_blob")
+  encryptedDek  Bytes          @map("encrypted_dek")
+  iv            Bytes
+  authTag       Bytes          @map("auth_tag")
+  metadata      Json?
+  scopes        String[]       @default([])
+  expiresAt     DateTime?      @map("expires_at")
+  isRevoked     Boolean        @default(false) @map("is_revoked")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+  agentId       String         @map("agent_id")
+  agent         Agent          @relation(fields: [agentId], references: [id])
+
+  @@map("credentials")
 }

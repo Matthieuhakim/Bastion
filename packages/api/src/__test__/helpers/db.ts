@@ -3,6 +3,7 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 export async function cleanDatabase(): Promise<void> {
+  await prisma.credential.deleteMany();
   await prisma.agent.deleteMany();
 }
 
