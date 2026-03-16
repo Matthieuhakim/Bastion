@@ -13,7 +13,13 @@ afterEach(() => {
 
 describe('buildWebhookPayload', () => {
   it('constructs payload with approve and deny URLs', () => {
-    const payload = buildWebhookPayload('req-1', 'agent-1', 'charges.create', { amount: 5000 }, 'Exceeds threshold');
+    const payload = buildWebhookPayload(
+      'req-1',
+      'agent-1',
+      'charges.create',
+      { amount: 5000 },
+      'Exceeds threshold',
+    );
 
     expect(payload).toEqual({
       requestId: 'req-1',

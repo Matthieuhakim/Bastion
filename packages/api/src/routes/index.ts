@@ -5,6 +5,7 @@ import { credentialRouter } from './credentials.js';
 import { policyRouter } from './policies.js';
 import { proxyRouter } from './proxy.js';
 import { hitlRouter } from './hitl.js';
+import { auditRouter } from './audit.js';
 
 export const router = Router();
 
@@ -14,3 +15,4 @@ router.use('/v1/credentials', credentialRouter);
 router.use('/v1/policies', policyRouter);
 router.use('/v1/proxy', proxyRouter);
 router.use('/v1/hitl', hitlRouter);
+router.use('/v1/audit', auditRouter);

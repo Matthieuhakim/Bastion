@@ -4,6 +4,7 @@ import { redis } from '../../services/redis.js';
 const prisma = new PrismaClient();
 
 export async function cleanDatabase(): Promise<void> {
+  await prisma.auditRecord.deleteMany();
   await prisma.policy.deleteMany();
   await prisma.credential.deleteMany();
   await prisma.agent.deleteMany();

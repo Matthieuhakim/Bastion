@@ -2,11 +2,7 @@ import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { requireAdmin } from '../middleware/auth.js';
 import { NotFoundError } from '../errors.js';
-import {
-  resolveRequest,
-  getPendingRequest,
-  listPendingRequests,
-} from '../services/hitl.js';
+import { resolveRequest, getPendingRequest, listPendingRequests } from '../services/hitl.js';
 
 export const hitlRouter = Router();
 
@@ -28,14 +24,17 @@ hitlRouter.get('/:requestId', async (req: Request<{ requestId: string }>, res: R
 });
 
 // POST /v1/hitl/:requestId/approve
-hitlRouter.post('/:requestId/approve', async (req: Request<{ requestId: string }>, res: Response) => {
-  const result = await resolveRequest(req.params.requestId, 'approved');
-  res.json({
-    requestId: result.requestId,
-    status: 'approved',
-    message: 'Request approved',
-  });
-});
+hitlRouter.post(
+  '/:requestId/approve',
+  async (req: Request<{ requestId: string }>, res: Response) => {
+    const result = await resolveRequest(req.params.requestId, 'approved');
+    res.json({
+      requestId: result.requestId,
+      status: 'approved',
+      message: 'Request approved',
+    });
+  },
+);
 
 // POST /v1/hitl/:requestId/deny
 hitlRouter.post('/:requestId/deny', async (req: Request<{ requestId: string }>, res: Response) => {

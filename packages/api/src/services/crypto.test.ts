@@ -1,4 +1,12 @@
-import { generateApiSecret, hashApiKey, generateKeypair } from './crypto.js';
+import { describe, expect, it } from 'vitest';
+import {
+  generateApiSecret,
+  hashApiKey,
+  generateKeypair,
+  signHash,
+  verifySignature,
+  sha256,
+} from './crypto.js';
 
 describe('generateApiSecret', () => {
   it('returns string starting with "bst_"', () => {
@@ -77,5 +85,24 @@ describe('generateKeypair', () => {
     const b = await generateKeypair();
     expect(a.publicKey).not.toBe(b.publicKey);
     expect(a.privateKey).not.toBe(b.privateKey);
+  });
+});
+
+describe('signHash / verifySignature', () => {
+  it('verifies a valid signature', async () => {
+    const keypair = await generateKeypair();
+    const hash = sha256(new TextEncoder().encode('audit record'));
+    const signature = await signHash(hash, keypair.privateKey);
+
+    await expect(verifySignature(hash, signature, keypair.publicKey)).resolves.toBe(true);
+  });
+
+  it('fails verification for tampered data', async () => {
+    const keypair = await generateKeypair();
+    const originalHash = sha256(new TextEncoder().encode('audit record'));
+    const tamperedHash = sha256(new TextEncoder().encode('tampered'));
+    const signature = await signHash(originalHash, keypair.privateKey);
+
+    await expect(verifySignature(tamperedHash, signature, keypair.publicKey)).resolves.toBe(false);
   });
 });

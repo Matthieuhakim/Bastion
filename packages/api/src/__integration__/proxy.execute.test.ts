@@ -241,11 +241,13 @@ describe('POST /v1/proxy/execute', () => {
 
   describe('authentication', () => {
     it('returns 401 without Authorization header', async () => {
-      const res = await request(app).post('/v1/proxy/execute').send({
-        credentialId: 'some-id',
-        action: 'test.get',
-        target: { url: 'https://api.example.com/data', method: 'GET' },
-      });
+      const res = await request(app)
+        .post('/v1/proxy/execute')
+        .send({
+          credentialId: 'some-id',
+          action: 'test.get',
+          target: { url: 'https://api.example.com/data', method: 'GET' },
+        });
 
       expect(res.status).toBe(401);
     });

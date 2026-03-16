@@ -21,7 +21,7 @@
 2. Bastion checks the policy — is this agent allowed to do this, at this amount, at this time?
 3. If **ALLOW**: Bastion decrypts the credential from the vault, injects it into the request, calls the external API, and returns the result
 4. If **DENY**: the agent gets a 403 with the reason
-5. If **ESCALATE**: the request is paused for human approval (coming soon)
+5. If **ESCALATE**: the request is paused for human approval
 
 The agent never sees the raw API key. Bastion handles it server-side and zeroes it from memory after use.
 
@@ -38,7 +38,7 @@ npm install
 docker compose up -d
 
 # Configure environment
-cp packages/api/.env.example packages/api/.env
+cp .env.example packages/api/.env
 # Edit .env: set MASTER_KEY (64 hex chars) and PROJECT_API_KEY (your admin key)
 
 # Run migrations and start the server
@@ -149,6 +149,20 @@ The request body has three parts:
 - **`action`** + **`params`** — what the agent wants to do, evaluated against the policy
 - **`target`** — the external API call Bastion will make on the agent's behalf
 
+### 4. Inspect the audit chain
+
+Every proxy decision is appended to a per-agent signed audit chain. You can query recent records or verify chain integrity with the admin API:
+
+```bash
+# Query recent audit records
+curl -s "http://localhost:3000/v1/audit?agentId=<agent_id>" \
+  -H "Authorization: Bearer $ADMIN_KEY" | jq
+
+# Verify the full chain for an agent
+curl -s "http://localhost:3000/v1/audit/verify?agentId=<agent_id>" \
+  -H "Authorization: Bearer $ADMIN_KEY" | jq
+```
+
 ### Credential injection
 
 By default, `API_KEY` and `OAUTH2` credentials are injected as `Authorization: Bearer <key>`. You can override this:
@@ -178,13 +192,14 @@ Options: `header`, `query` (appends to URL), or `body` (adds a field to the requ
 
 **Human-in-the-Loop Gate** — When a policy triggers ESCALATE (e.g., amount exceeds approval threshold), the agent's request is held open while a human reviews it. Admins approve or deny via API endpoints. On approval, the proxy flow resumes transparently. On denial or timeout (default 5 min), the agent gets a 403. Optional webhook notifications to the agent's `callbackUrl`.
 
+**Signed Audit Chain** — Every ALLOW, DENY, and ESCALATE outcome is canonicalized, SHA-256 hashed, signed with the agent's Ed25519 key, and linked to the previous record. Admins can query `/v1/audit` and verify chain integrity with `/v1/audit/verify`.
+
 **Fail closed** — No policy for an agent+credential pair = DENY. Bastion never silently allows a request.
 
 ## Roadmap
 
 See [ROADMAP.md](ROADMAP.md) for the full plan. Coming next:
 
-- **Signed Audit Chain** — Ed25519-signed, SHA-256 hash-chained records for every decision
 - **SDKs** — full TypeScript and Python client libraries
 - **Dashboard** — web UI for monitoring agents, approving requests, viewing audit logs
 

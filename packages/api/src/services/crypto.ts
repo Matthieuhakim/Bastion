@@ -1,4 +1,4 @@
-import { keygenAsync, etc } from '@noble/ed25519';
+import { keygenAsync, signAsync, verifyAsync, etc } from '@noble/ed25519';
 import { sha256 } from '@noble/hashes/sha2.js';
 import crypto from 'node:crypto';
 
@@ -27,3 +27,17 @@ export function generateApiSecret(): string {
   const bytes = crypto.randomBytes(32);
   return `bst_${bytes.toString('hex')}`;
 }
+
+export async function signHash(hash: Uint8Array, privateKeyHex: string): Promise<Uint8Array> {
+  return signAsync(hash, etc.hexToBytes(privateKeyHex));
+}
+
+export async function verifySignature(
+  hash: Uint8Array,
+  signature: Uint8Array,
+  publicKeyHex: string,
+): Promise<boolean> {
+  return verifyAsync(signature, hash, etc.hexToBytes(publicKeyHex));
+}
+
+export { sha256 };

@@ -40,11 +40,16 @@ vi.mock('./notifications.js', () => ({
   buildWebhookPayload: vi.fn().mockReturnValue({}),
 }));
 
+vi.mock('./auditChain.js', () => ({
+  appendAuditRecord: vi.fn(),
+}));
+
 import { prisma } from './db.js';
 import { decryptCredential } from './credentials.js';
 import { evaluateRequest, commitRateLimitAndSpend } from './policyEngine.js';
 import { callExternalApi } from './httpClient.js';
 import { createPendingRequest, waitForResolution } from './hitl.js';
+import { appendAuditRecord } from './auditChain.js';
 
 const mockFindCredential = prisma.credential.findUnique as ReturnType<typeof vi.fn>;
 const mockFindAgent = prisma.agent.findUnique as ReturnType<typeof vi.fn>;
@@ -54,6 +59,7 @@ const mockCommit = commitRateLimitAndSpend as ReturnType<typeof vi.fn>;
 const mockCallApi = callExternalApi as ReturnType<typeof vi.fn>;
 const mockCreatePending = createPendingRequest as ReturnType<typeof vi.fn>;
 const mockWaitForResolution = waitForResolution as ReturnType<typeof vi.fn>;
+const mockAppendAuditRecord = appendAuditRecord as ReturnType<typeof vi.fn>;
 
 function makeInput(overrides: Partial<ProxyExecuteInput> = {}): ProxyExecuteInput {
   return {
@@ -95,6 +101,7 @@ beforeEach(() => {
     body: { result: 'ok' },
   });
   mockCommit.mockResolvedValue(undefined);
+  mockAppendAuditRecord.mockResolvedValue(undefined);
 });
 
 describe('executeProxy', () => {
@@ -159,17 +166,24 @@ describe('executeProxy', () => {
       // Upstream should not be called
       expect(mockCallApi).not.toHaveBeenCalled();
       expect(mockCommit).not.toHaveBeenCalled();
+      expect(mockAppendAuditRecord).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentId: 'agent-1',
+          credentialId: 'cred-1',
+          action: 'test.get',
+          policyDecision: 'DENY',
+          outcome: 'denied',
+        }),
+      );
     });
 
     it('passes params to evaluateRequest', async () => {
       await executeProxy(makeInput({ params: { amount: 500, ip: '10.0.0.1' } }));
 
-      expect(mockEvaluate).toHaveBeenCalledWith(
-        'agent-1',
-        'cred-1',
-        'test.get',
-        { amount: 500, ip: '10.0.0.1' },
-      );
+      expect(mockEvaluate).toHaveBeenCalledWith('agent-1', 'cred-1', 'test.get', {
+        amount: 500,
+        ip: '10.0.0.1',
+      });
     });
   });
 
@@ -214,15 +228,31 @@ describe('executeProxy', () => {
       await expect(executeProxy(makeInput())).rejects.toThrow('denied by human reviewer');
       expect(mockDecrypt).not.toHaveBeenCalled();
       expect(mockCallApi).not.toHaveBeenCalled();
+      expect(mockAppendAuditRecord).toHaveBeenCalledWith(
+        expect.objectContaining({
+          policyDecision: 'ESCALATE',
+          hitlRequestId: 'hitl-req-1',
+          outcome: 'denied',
+        }),
+      );
     });
 
     it('throws ForbiddenError on HITL timeout', async () => {
       mockWaitForResolution.mockResolvedValue('timeout');
 
       await expect(executeProxy(makeInput())).rejects.toThrow(ForbiddenError);
-      await expect(executeProxy(makeInput())).rejects.toThrow('timed out waiting for human approval');
+      await expect(executeProxy(makeInput())).rejects.toThrow(
+        'timed out waiting for human approval',
+      );
       expect(mockDecrypt).not.toHaveBeenCalled();
       expect(mockCallApi).not.toHaveBeenCalled();
+      expect(mockAppendAuditRecord).toHaveBeenCalledWith(
+        expect.objectContaining({
+          policyDecision: 'ESCALATE',
+          hitlRequestId: 'hitl-req-1',
+          outcome: 'denied',
+        }),
+      );
     });
 
     it('creates a pending request with correct input', async () => {
@@ -443,6 +473,13 @@ describe('executeProxy', () => {
 
       await expect(executeProxy(makeInput())).rejects.toThrow(BadGatewayError);
       expect(mockCommit).not.toHaveBeenCalled();
+      expect(mockAppendAuditRecord).toHaveBeenCalledWith(
+        expect.objectContaining({
+          policyDecision: 'ALLOW',
+          outcome: 'failed',
+          error: 'Upstream failed',
+        }),
+      );
     });
   });
 

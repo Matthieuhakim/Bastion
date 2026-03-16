@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
 import request from 'supertest';
+import type { Response, Test } from 'supertest';
 import { createApp } from '../app.js';
 import { cleanDatabase, cleanRedis, disconnectDatabase } from '../__test__/helpers/db.js';
 import { redis } from '../services/redis.js';
@@ -17,6 +18,19 @@ function adminAuthed(method: 'get' | 'post' | 'patch' | 'delete', path: string) 
 
 function agentAuthed(method: 'post', path: string, agentSecret: string) {
   return request(app)[method](path).set('Authorization', `Bearer ${agentSecret}`);
+}
+
+function sendNow(test: Test): Promise<Response> {
+  return new Promise((resolve, reject) => {
+    test.end((error, response) => {
+      if (response) {
+        resolve(response);
+        return;
+      }
+
+      reject(error);
+    });
+  });
 }
 
 async function createTestAgent(overrides: Record<string, unknown> = {}) {
@@ -60,9 +74,9 @@ function mockUpstreamResponse(status = 200, body: unknown = { charged: true }) {
       return {
         status,
         headers,
-        arrayBuffer: vi.fn().mockResolvedValue(
-          new TextEncoder().encode(JSON.stringify(body)).buffer,
-        ),
+        arrayBuffer: vi
+          .fn()
+          .mockResolvedValue(new TextEncoder().encode(JSON.stringify(body)).buffer),
       };
     }
     // Webhook calls: return ok
@@ -117,12 +131,14 @@ describe('HITL Gate', () => {
       mockUpstreamResponse(200, { charged: true });
 
       // Start the proxy request (will block on HITL)
-      const proxyPromise = agentAuthed('post', '/v1/proxy/execute', agent.agentSecret).send({
-        credentialId: credential.id,
-        action: 'charges.create',
-        params: { amount: 5000 },
-        target: { url: 'https://api.stripe.com/v1/charges', method: 'POST' },
-      });
+      const proxyPromise = sendNow(
+        agentAuthed('post', '/v1/proxy/execute', agent.agentSecret).send({
+          credentialId: credential.id,
+          action: 'charges.create',
+          params: { amount: 5000 },
+          target: { url: 'https://api.stripe.com/v1/charges', method: 'POST' },
+        }),
+      );
 
       // Wait for the HITL request to be created in Redis
       await new Promise((resolve) => setTimeout(resolve, 200));
@@ -163,12 +179,14 @@ describe('HITL Gate', () => {
       await createTestPolicy(agent.id, credential.id);
 
       // Start the proxy request (will block on HITL)
-      const proxyPromise = agentAuthed('post', '/v1/proxy/execute', agent.agentSecret).send({
-        credentialId: credential.id,
-        action: 'charges.create',
-        params: { amount: 5000 },
-        target: { url: 'https://api.stripe.com/v1/charges', method: 'POST' },
-      });
+      const proxyPromise = sendNow(
+        agentAuthed('post', '/v1/proxy/execute', agent.agentSecret).send({
+          credentialId: credential.id,
+          action: 'charges.create',
+          params: { amount: 5000 },
+          target: { url: 'https://api.stripe.com/v1/charges', method: 'POST' },
+        }),
+      );
 
       await new Promise((resolve) => setTimeout(resolve, 200));
 
@@ -198,12 +216,14 @@ describe('HITL Gate', () => {
 
       mockUpstreamResponse();
 
-      const proxyPromise = agentAuthed('post', '/v1/proxy/execute', agent.agentSecret).send({
-        credentialId: credential.id,
-        action: 'charges.create',
-        params: { amount: 5000 },
-        target: { url: 'https://api.stripe.com/v1/charges', method: 'POST' },
-      });
+      const proxyPromise = sendNow(
+        agentAuthed('post', '/v1/proxy/execute', agent.agentSecret).send({
+          credentialId: credential.id,
+          action: 'charges.create',
+          params: { amount: 5000 },
+          target: { url: 'https://api.stripe.com/v1/charges', method: 'POST' },
+        }),
+      );
 
       await new Promise((resolve) => setTimeout(resolve, 200));
 
@@ -229,18 +249,20 @@ describe('HITL Gate', () => {
 
       mockUpstreamResponse();
 
-      const proxyPromise = agentAuthed('post', '/v1/proxy/execute', agent.agentSecret).send({
-        credentialId: credential.id,
-        action: 'charges.create',
-        params: { amount: 5000 },
-        target: { url: 'https://api.stripe.com/v1/charges', method: 'POST' },
-      });
+      const proxyPromise = sendNow(
+        agentAuthed('post', '/v1/proxy/execute', agent.agentSecret).send({
+          credentialId: credential.id,
+          action: 'charges.create',
+          params: { amount: 5000 },
+          target: { url: 'https://api.stripe.com/v1/charges', method: 'POST' },
+        }),
+      );
 
       await new Promise((resolve) => setTimeout(resolve, 200));
 
       // Verify webhook was called
       const webhookCalls = mockFetch.mock.calls.filter(
-        ([url]: [string]) => typeof url === 'string' && url.includes('example.com/webhook'),
+        ([url]) => typeof url === 'string' && url.includes('example.com/webhook'),
       );
       expect(webhookCalls.length).toBeGreaterThanOrEqual(1);
 
@@ -265,12 +287,14 @@ describe('HITL Gate', () => {
 
       mockUpstreamResponse();
 
-      const proxyPromise = agentAuthed('post', '/v1/proxy/execute', agent.agentSecret).send({
-        credentialId: credential.id,
-        action: 'charges.create',
-        params: { amount: 5000 },
-        target: { url: 'https://api.stripe.com/v1/charges', method: 'POST' },
-      });
+      const proxyPromise = sendNow(
+        agentAuthed('post', '/v1/proxy/execute', agent.agentSecret).send({
+          credentialId: credential.id,
+          action: 'charges.create',
+          params: { amount: 5000 },
+          target: { url: 'https://api.stripe.com/v1/charges', method: 'POST' },
+        }),
+      );
 
       await new Promise((resolve) => setTimeout(resolve, 200));
 

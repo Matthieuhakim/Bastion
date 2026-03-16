@@ -13,14 +13,17 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function makeResponse(overrides: Partial<Response> & { bodyText?: string; bodyJson?: unknown } = {}) {
+function makeResponse(
+  overrides: Partial<Response> & { bodyText?: string; bodyJson?: unknown } = {},
+) {
   const headers = new Headers(overrides.headers);
   if (!headers.has('content-type') && overrides.bodyJson !== undefined) {
     headers.set('content-type', 'application/json');
   }
-  const body = overrides.bodyJson !== undefined
-    ? JSON.stringify(overrides.bodyJson)
-    : (overrides.bodyText ?? '');
+  const body =
+    overrides.bodyJson !== undefined
+      ? JSON.stringify(overrides.bodyJson)
+      : (overrides.bodyText ?? '');
   return {
     status: overrides.status ?? 200,
     headers,
@@ -134,10 +137,7 @@ describe('callExternalApi', () => {
     mockFetch.mockRejectedValue(abortError);
 
     await expect(
-      callExternalApi(
-        { url: 'https://api.example.com/test', method: 'GET', headers: {} },
-        1000,
-      ),
+      callExternalApi({ url: 'https://api.example.com/test', method: 'GET', headers: {} }, 1000),
     ).rejects.toThrow(/timed out/);
   });
 

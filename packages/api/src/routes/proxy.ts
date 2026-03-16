@@ -10,15 +10,7 @@ export const proxyRouter = Router();
 
 proxyRouter.use(requireAgent);
 
-const ALLOWED_METHODS = new Set([
-  'GET',
-  'POST',
-  'PUT',
-  'PATCH',
-  'DELETE',
-  'HEAD',
-  'OPTIONS',
-]);
+const ALLOWED_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']);
 
 function validateExecuteInput(req: Request): ProxyExecuteInput {
   const { credentialId, action, params, target, injection, timeout } = req.body;
@@ -62,14 +54,16 @@ function validateExecuteInput(req: Request): ProxyExecuteInput {
 
   const method = target.method ? String(target.method).toUpperCase() : 'GET';
   if (!ALLOWED_METHODS.has(method)) {
-    throw new ValidationError(
-      `target.method must be one of: ${[...ALLOWED_METHODS].join(', ')}`,
-    );
+    throw new ValidationError(`target.method must be one of: ${[...ALLOWED_METHODS].join(', ')}`);
   }
 
   const headers: Record<string, string> = {};
   if (target.headers !== undefined) {
-    if (typeof target.headers !== 'object' || target.headers === null || Array.isArray(target.headers)) {
+    if (
+      typeof target.headers !== 'object' ||
+      target.headers === null ||
+      Array.isArray(target.headers)
+    ) {
       throw new ValidationError('target.headers must be an object');
     }
     for (const [key, value] of Object.entries(target.headers)) {

@@ -8,6 +8,7 @@ import type { ExternalResponse } from './httpClient.js';
 import { ForbiddenError, ValidationError } from '../errors.js';
 import { createPendingRequest, waitForResolution } from './hitl.js';
 import { sendWebhookNotification, buildWebhookPayload } from './notifications.js';
+import { appendAuditRecord } from './auditChain.js';
 
 export interface ProxyTarget {
   url: string;
@@ -46,14 +47,27 @@ export interface ProxyResult {
   meta: ProxyMeta;
 }
 
-const BLOCKED_HOSTNAMES = new Set([
-  'localhost',
-  '127.0.0.1',
-  '[::1]',
-  '0.0.0.0',
-]);
+const BLOCKED_HOSTNAMES = new Set(['localhost', '127.0.0.1', '[::1]', '0.0.0.0']);
 
 const HITL_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return String(error);
+}
+
+async function appendAuditRecordSafely(
+  input: Parameters<typeof appendAuditRecord>[0],
+): Promise<void> {
+  try {
+    await appendAuditRecord(input);
+  } catch (error) {
+    console.error('Failed to append audit record:', error);
+  }
+}
 
 function validateTargetUrl(url: string): URL {
   let parsed: URL;
@@ -147,30 +161,67 @@ async function executeUpstreamCall(
   start: number,
   hitlRequestId?: string,
 ): Promise<ProxyResult> {
-  // Decrypt credential
-  const credentialValue = await decryptCredential(credentialId);
+  try {
+    // Decrypt credential
+    const credentialValue = await decryptCredential(credentialId);
 
-  // Inject credential into request
-  const injectedTarget = injectCredential(target, credentialValue, credential.type, injection);
+    // Inject credential into request
+    const injectedTarget = injectCredential(target, credentialValue, credential.type, injection);
 
-  // Call external API
-  const upstream = await callExternalApi(injectedTarget, timeout);
+    // Call external API
+    const upstream = await callExternalApi(injectedTarget, timeout);
 
-  // Commit rate limit and spend counters (only after successful upstream call)
-  await commitRateLimitAndSpend(agentId, credentialId, params);
+    // Commit rate limit and spend counters (only after successful upstream call)
+    await commitRateLimitAndSpend(agentId, credentialId, params);
 
-  return {
-    outcome: 'executed',
-    upstream,
-    meta: {
-      credentialId,
+    const durationMs = Date.now() - start;
+    await appendAuditRecordSafely({
+      agentId,
       action,
+      targetUrl: target.url,
+      targetMethod: target.method,
+      credentialId,
       policyDecision: 'ALLOW',
       policyId,
+      reason: 'Request executed successfully',
+      params,
+      durationMs,
+      hitlRequestId,
+      upstreamStatus: upstream.status,
+      outcome: 'executed',
+    });
+
+    return {
+      outcome: 'executed',
+      upstream,
+      meta: {
+        credentialId,
+        action,
+        policyDecision: 'ALLOW',
+        policyId,
+        durationMs,
+        hitlRequestId,
+      },
+    };
+  } catch (error) {
+    await appendAuditRecordSafely({
+      agentId,
+      action,
+      targetUrl: target.url,
+      targetMethod: target.method,
+      credentialId,
+      policyDecision: 'ALLOW',
+      policyId,
+      reason: 'Request allowed but upstream execution failed',
+      params,
       durationMs: Date.now() - start,
       hitlRequestId,
-    },
-  };
+      outcome: 'failed',
+      error: getErrorMessage(error),
+    });
+
+    throw error;
+  }
 }
 
 export async function executeProxy(input: ProxyExecuteInput): Promise<ProxyResult> {
@@ -195,6 +246,19 @@ export async function executeProxy(input: ProxyExecuteInput): Promise<ProxyResul
   const evaluation = await evaluateRequest(agentId, credentialId, action, params);
 
   if (evaluation.decision === 'DENY') {
+    await appendAuditRecordSafely({
+      agentId,
+      action,
+      targetUrl: target.url,
+      targetMethod: target.method,
+      credentialId,
+      policyDecision: 'DENY',
+      policyId: evaluation.policyId,
+      reason: evaluation.reason,
+      params,
+      durationMs: Date.now() - start,
+      outcome: 'denied',
+    });
     throw new ForbiddenError(evaluation.reason);
   }
 
@@ -222,9 +286,37 @@ export async function executeProxy(input: ProxyExecuteInput): Promise<ProxyResul
     const resolution = await waitForResolution(pending.requestId, HITL_TIMEOUT_MS);
 
     if (resolution === 'denied') {
+      await appendAuditRecordSafely({
+        agentId,
+        action,
+        targetUrl: target.url,
+        targetMethod: target.method,
+        credentialId,
+        policyDecision: 'ESCALATE',
+        policyId: evaluation.policyId,
+        reason: 'Request denied by human reviewer',
+        params,
+        durationMs: Date.now() - start,
+        hitlRequestId: pending.requestId,
+        outcome: 'denied',
+      });
       throw new ForbiddenError('Request denied by human reviewer');
     }
     if (resolution === 'timeout') {
+      await appendAuditRecordSafely({
+        agentId,
+        action,
+        targetUrl: target.url,
+        targetMethod: target.method,
+        credentialId,
+        policyDecision: 'ESCALATE',
+        policyId: evaluation.policyId,
+        reason: 'Request timed out waiting for human approval',
+        params,
+        durationMs: Date.now() - start,
+        hitlRequestId: pending.requestId,
+        outcome: 'denied',
+      });
       throw new ForbiddenError('Request timed out waiting for human approval');
     }
 

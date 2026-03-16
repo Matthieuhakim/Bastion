@@ -69,3 +69,18 @@ model Policy {
 
   @@map("policies")
 }
+
+model AuditRecord {
+  id                   BigInt   @id @default(autoincrement())
+  agentId              String   @map("agent_id")
+  recordJson           Json     @map("record_json")
+  recordHash           Bytes    @map("record_hash")
+  signature            Bytes
+  signerKeyFingerprint String   @map("signer_key_fingerprint")
+  previousHash         Bytes    @map("previous_hash")
+  createdAt            DateTime @default(now()) @map("created_at")
+
+  @@index([agentId, createdAt])
+  @@index([agentId, id])
+  @@map("audit_records")
+}

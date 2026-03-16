@@ -365,7 +365,7 @@ curl -X POST http://localhost:3000/v1/hitl/<requestId>/approve \
 
 ### Steps
 
-- [ ] **6.1 Prisma schema for audit chain**
+- [x] **6.1 Prisma schema for audit chain**
   ```
   AuditRecord {
     id (BigInt autoincrement),
@@ -379,12 +379,12 @@ curl -X POST http://localhost:3000/v1/hitl/<requestId>/approve \
   ```
   - Append-only: Bastion service account has INSERT + SELECT only
 
-- [ ] **6.2 Canonical JSON serialization**
+- [x] **6.2 Canonical JSON serialization**
   - Deterministic JSON: keys sorted alphabetically, no whitespace
   - Use `JSON.stringify(obj, Object.keys(obj).sort())` or a canonical JSON lib
   - This ensures the same record always produces the same hash
 
-- [ ] **6.3 Hash chain construction**
+- [x] **6.3 Hash chain construction**
   - For each audit record:
     1. Get `previousHash` from the last record in the chain (or genesis hash for first)
     2. Build record JSON including `previousHash`
@@ -392,12 +392,12 @@ curl -X POST http://localhost:3000/v1/hitl/<requestId>/approve \
     4. Sign `recordHash` with agent's Ed25519 private key → `signature`
     5. INSERT into audit_chain table
 
-- [ ] **6.4 Audit record creation (integrated into proxy)**
+- [x] **6.4 Audit record creation (integrated into proxy)**
   - After every proxy request (regardless of outcome), create a signed audit record
   - Record includes: agent_id, action, target, method, policy_decision, matched_rule, request_metadata, credential_used, timestamp
   - Also log DENY and ESCALATE decisions (not just ALLOWs)
 
-- [ ] **6.5 Chain verification endpoint**
+- [x] **6.5 Chain verification endpoint**
   - `GET /v1/audit/verify?agentId=...` — verify entire chain for an agent
   - Walk chain from first to last record:
     1. Recompute SHA-256 of canonical JSON → matches `recordHash`?
@@ -405,7 +405,7 @@ curl -X POST http://localhost:3000/v1/hitl/<requestId>/approve \
     3. Check `previousHash` links to prior record
   - Return: `{ valid: true, recordCount: N, lastRecord: timestamp }` or `{ valid: false, brokenAt: recordId, reason: "..." }`
 
-- [ ] **6.6 Audit log query endpoint**
+- [x] **6.6 Audit log query endpoint**
   - `GET /v1/audit?agentId=...&from=...&to=...&action=...` — query audit records
   - Paginated, filterable by agent, time range, action, decision
 

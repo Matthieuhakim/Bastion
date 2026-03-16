@@ -207,7 +207,11 @@ describe('listPendingRequests', () => {
   it('cleans up stale entries from pending set', async () => {
     mockRedis.smembers.mockResolvedValue(['req-1', 'req-expired']);
     mockRedis.mget.mockResolvedValue([
-      JSON.stringify({ requestId: 'req-1', status: 'pending', createdAt: '2026-03-16T10:00:00.000Z' }),
+      JSON.stringify({
+        requestId: 'req-1',
+        status: 'pending',
+        createdAt: '2026-03-16T10:00:00.000Z',
+      }),
       null,
     ]);
 
