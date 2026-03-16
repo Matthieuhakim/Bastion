@@ -64,6 +64,8 @@ Monorepo with npm workspaces. Three packages:
 - **`src/services/db.ts`** — Prisma client singleton (uses `globalThis` to survive tsx hot-reloads).
 - **`src/services/crypto.ts`** — Ed25519 keypair generation (`@noble/ed25519`), SHA-256 hashing (`@noble/hashes/sha2.js`), API secret generation (`bst_` prefix + 32 random hex bytes).
 - **`src/services/agents.ts`** — Agent CRUD business logic. `createAgent` generates keypair + hashed secret. `findAgentBySecret` hashes incoming token for DB lookup.
+- **`src/services/encryption.ts`** — Envelope encryption (AES-256-GCM). Derives KEK from `MASTER_KEY` via HKDF. Each credential gets a random DEK, encrypted under the KEK. Plaintext buffers are zeroed after use.
+- **`src/services/credentials.ts`** — Credential CRUD. Encrypts values on create, never returns raw values over the API. `decryptCredential()` for internal proxy use only.
 
 ### Express middleware chain (order matters)
 

@@ -527,7 +527,7 @@ Phase 1 (Agents + Auth) ✅
     │
     ├──────────────────┐
     v                  v
-Phase 2 (Vault)    Phase 6 (Audit Chain) ←── can start schema/signing early
+Phase 2 (Vault) ✅ Phase 6 (Audit Chain) ←── can start schema/signing early
     │                  │
     v                  │
 Phase 3 (Policies)     │

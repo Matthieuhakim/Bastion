@@ -24,7 +24,9 @@ Bastion sits between your AI agents and the APIs they call. It:
 - **Agent CRUD** — list, get, update, soft-delete agents
 - **Admin auth** — `PROJECT_API_KEY` protects management routes (timing-safe comparison)
 - **Agent auth middleware** — agents authenticate via `Bearer <agent_secret>` (SHA-256 hashed, never stored plaintext)
-- Prisma schema with expanded Agent model (keypairs, hashed secrets, fingerprints)
+- **Credential Vault** — envelope encryption (AES-256-GCM + HKDF), per-credential DEKs, raw values never returned over the API
+- **Credential CRUD** — store, list, get, and revoke credentials (`/v1/credentials`)
+- Prisma schema with Agent and Credential models
 - TypeScript and Python SDK stubs
 - Local dev environment via Docker Compose (PostgreSQL + Redis)
 
