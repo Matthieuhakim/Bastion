@@ -157,7 +157,7 @@ npx vitest run src/services/encryption.test.ts --config packages/api/vitest.conf
 
 ### Steps
 
-- [ ] **3.1 Prisma schema for policies**
+- [x] **3.1 Prisma schema for policies**
   ```
   Policy {
     id, agentId → Agent, credentialId → Credential,
@@ -173,14 +173,14 @@ npx vitest run src/services/encryption.test.ts --config packages/api/vitest.conf
   }
   ```
 
-- [ ] **3.2 Policy CRUD endpoints**
+- [x] **3.2 Policy CRUD endpoints**
   - `POST /v1/policies` — create policy (admin auth)
   - `GET /v1/policies` — list policies, filterable by agentId/credentialId
   - `GET /v1/policies/:id` — get single policy
   - `PATCH /v1/policies/:id` — update policy rules
   - `DELETE /v1/policies/:id` — deactivate policy
 
-- [ ] **3.3 Policy evaluation engine**
+- [x] **3.3 Policy evaluation engine**
   - `evaluateRequest(agentId, credentialId, action, params)` → `ALLOW | DENY | ESCALATE`
   - Evaluation order:
     1. Find all active policies for this agent + credential pair
@@ -190,13 +190,13 @@ npx vitest run src/services/encryption.test.ts --config packages/api/vitest.conf
     5. Check `requiresApprovalAbove` threshold → ESCALATE
     6. Return decision + matched rule ID + reason
 
-- [ ] **3.4 Rate limit tracking (Redis)**
+- [x] **3.4 Rate limit tracking (Redis)**
   - Install `ioredis`
   - Redis key: `rate:{agentId}:{credentialId}:{windowStart}`
   - Increment on each request, check against `rateLimit.maxRequests`
   - TTL = `windowSeconds`
 
-- [ ] **3.5 Time window evaluation**
+- [x] **3.5 Time window evaluation**
   - Install `luxon` for timezone-aware time checks
   - Check current time against `days` array and `hours` range in specified timezone
 
@@ -530,7 +530,7 @@ Phase 1 (Agents + Auth) ✅
 Phase 2 (Vault) ✅ Phase 6 (Audit Chain) ←── can start schema/signing early
     │                  │
     v                  │
-Phase 3 (Policies)     │
+Phase 3 (Policies) ✅  │
     │                  │
     v                  │
 Phase 4 (Proxy) ───────┤ ←── audit integrated into proxy

@@ -1,4 +1,10 @@
-import { AppError, ValidationError, UnauthorizedError, NotFoundError, ConflictError } from './errors.js';
+import {
+  AppError,
+  ValidationError,
+  UnauthorizedError,
+  NotFoundError,
+  ConflictError,
+} from './errors.js';
 
 describe('AppError', () => {
   it('creates error with message and statusCode', () => {

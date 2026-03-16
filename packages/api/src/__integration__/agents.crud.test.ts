@@ -95,9 +95,7 @@ describe('Agent CRUD', () => {
     });
 
     it('returns 401 without Authorization header', async () => {
-      const res = await request(app)
-        .post('/v1/agents')
-        .send({ name: 'Agent' });
+      const res = await request(app).post('/v1/agents').send({ name: 'Agent' });
       expect(res.status).toBe(401);
     });
 
@@ -212,9 +210,7 @@ describe('Agent CRUD', () => {
     });
 
     it('returns 401 without auth', async () => {
-      const res = await request(app)
-        .patch('/v1/agents/some-id')
-        .send({ name: 'Nope' });
+      const res = await request(app).patch('/v1/agents/some-id').send({ name: 'Nope' });
       expect(res.status).toBe(401);
     });
   });

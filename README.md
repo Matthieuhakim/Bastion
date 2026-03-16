@@ -26,7 +26,10 @@ Bastion sits between your AI agents and the APIs they call. It:
 - **Agent auth middleware** — agents authenticate via `Bearer <agent_secret>` (SHA-256 hashed, never stored plaintext)
 - **Credential Vault** — envelope encryption (AES-256-GCM + HKDF), per-credential DEKs, raw values never returned over the API
 - **Credential CRUD** — store, list, get, and revoke credentials (`/v1/credentials`)
-- Prisma schema with Agent and Credential models
+- **Policy Engine (ABAC)** — attribute-based access control with wildcard action matching, amount limits, rate limits (Redis), timezone-aware time windows (Luxon), IP allowlists, and approval thresholds
+- **Policy CRUD** — create, list, get, update, and deactivate policies (`/v1/policies`)
+- **Policy evaluation** — dry-run endpoint (`POST /v1/policies/evaluate`) returns ALLOW / DENY / ESCALATE with reason; fail-closed (no policy = deny)
+- Prisma schema with Agent, Credential, and Policy models
 - TypeScript and Python SDK stubs
 - Local dev environment via Docker Compose (PostgreSQL + Redis)
 

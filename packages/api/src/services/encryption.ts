@@ -35,7 +35,10 @@ function deriveKek(): Buffer {
   return kek;
 }
 
-function encryptWithKey(plaintext: Buffer, key: Buffer): { ciphertext: Buffer; iv: Buffer; authTag: Buffer } {
+function encryptWithKey(
+  plaintext: Buffer,
+  key: Buffer,
+): { ciphertext: Buffer; iv: Buffer; authTag: Buffer } {
   const iv = crypto.randomBytes(IV_LENGTH);
   const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
   const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
@@ -62,7 +65,11 @@ export function encrypt(plaintext: string): EncryptedPayload {
   const dekEncrypted = encryptWithKey(dek, derivedKek);
   dek.fill(0);
 
-  const encryptedDek = Buffer.concat([dekEncrypted.iv, dekEncrypted.authTag, dekEncrypted.ciphertext]);
+  const encryptedDek = Buffer.concat([
+    dekEncrypted.iv,
+    dekEncrypted.authTag,
+    dekEncrypted.ciphertext,
+  ]);
 
   return {
     encryptedBlob: blob.ciphertext,

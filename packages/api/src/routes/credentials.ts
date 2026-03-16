@@ -37,7 +37,10 @@ function validateCreateInput(
     throw new ValidationError('agentId is required');
   }
 
-  if (metadata !== undefined && (typeof metadata !== 'object' || metadata === null || Array.isArray(metadata))) {
+  if (
+    metadata !== undefined &&
+    (typeof metadata !== 'object' || metadata === null || Array.isArray(metadata))
+  ) {
     throw new ValidationError('metadata must be an object');
   }
 

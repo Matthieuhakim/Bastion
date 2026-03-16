@@ -11,9 +11,7 @@ describe('Auth middleware integration', () => {
 
   describe('requireAdmin', () => {
     it('allows request with valid PROJECT_API_KEY', async () => {
-      const res = await request(app)
-        .get('/v1/agents')
-        .set('Authorization', `Bearer ${API_KEY}`);
+      const res = await request(app).get('/v1/agents').set('Authorization', `Bearer ${API_KEY}`);
       expect(res.status).toBe(200);
     });
 
@@ -31,9 +29,7 @@ describe('Auth middleware integration', () => {
     });
 
     it('rejects request with non-Bearer scheme', async () => {
-      const res = await request(app)
-        .get('/v1/agents')
-        .set('Authorization', `Basic ${API_KEY}`);
+      const res = await request(app).get('/v1/agents').set('Authorization', `Basic ${API_KEY}`);
       expect(res.status).toBe(401);
     });
   });
