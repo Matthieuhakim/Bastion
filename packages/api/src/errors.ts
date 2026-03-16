@@ -29,9 +29,23 @@ export class NotFoundError extends AppError {
   }
 }
 
+export class ForbiddenError extends AppError {
+  constructor(message = 'Forbidden') {
+    super(message, 403);
+    this.name = 'ForbiddenError';
+  }
+}
+
 export class ConflictError extends AppError {
   constructor(message = 'Conflict') {
     super(message, 409);
     this.name = 'ConflictError';
+  }
+}
+
+export class BadGatewayError extends AppError {
+  constructor(message = 'Bad Gateway') {
+    super(message, 502);
+    this.name = 'BadGatewayError';
   }
 }

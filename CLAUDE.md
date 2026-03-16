@@ -58,9 +58,9 @@ Monorepo with npm workspaces. Three packages:
 - **`src/index.ts`** — Entry point. Calls `createApp()` and starts the HTTP server.
 - **`src/app.ts`** — Express app factory (`createApp()`). Composes middleware and routes. Side-effect-free for testability.
 - **`src/config.ts`** — Loads `.env` via `import 'dotenv/config'` (must be the first import in the dependency chain). Exports a typed `config` object. Uses `requireEnv()` for mandatory vars.
-- **`src/routes/index.ts`** — Route aggregator. Each feature gets its own router file, mounted here. Currently mounts: `/health`, `/v1/agents`, `/v1/credentials`, `/v1/policies`.
+- **`src/routes/index.ts`** — Route aggregator. Each feature gets its own router file, mounted here. Currently mounts: `/health`, `/v1/agents`, `/v1/credentials`, `/v1/policies`, `/v1/proxy`.
 - **`src/middleware/`** — Express middleware. `errorHandler.ts` must be registered last (4-param signature). `requestId.ts` sets `X-Request-Id` on every response. `auth.ts` provides `requireAdmin` (timing-safe PROJECT_API_KEY check) and `requireAgent` (hash-based agent secret lookup; also checks `isActive` flag).
-- **`src/errors.ts`** — Typed error classes (`AppError`, `ValidationError`, `UnauthorizedError`, `NotFoundError`, `ConflictError`). Thrown by services, caught by `errorHandler`.
+- **`src/errors.ts`** — Typed error classes (`AppError`, `ValidationError`, `UnauthorizedError`, `ForbiddenError`, `NotFoundError`, `ConflictError`, `BadGatewayError`). Thrown by services, caught by `errorHandler`.
 - **`src/services/db.ts`** — Prisma client singleton (uses `globalThis` to survive tsx hot-reloads).
 - **`src/services/redis.ts`** — Redis client singleton (`ioredis`, same `globalThis` pattern as `db.ts`). Rate limit helpers use an atomic Lua script for INCR + conditional EXPIRE. Daily spend tracking uses INCRBYFLOAT with 48h TTL keys.
 - **`src/services/crypto.ts`** — Ed25519 keypair generation (`@noble/ed25519`), SHA-256 hashing (`@noble/hashes/sha2.js`), API secret generation (`bst_` prefix + 32 random hex bytes).
@@ -68,7 +68,9 @@ Monorepo with npm workspaces. Three packages:
 - **`src/services/agents.ts`** — Agent CRUD business logic. `createAgent` generates keypair + hashed secret. `findAgentBySecret` hashes incoming token for DB lookup. Soft-delete via `isActive` flag.
 - **`src/services/credentials.ts`** — Credential CRUD. Encrypts values on create, never returns raw values over the API. Stores a `_displayHint` in metadata (first 3 + last 4 chars). `decryptCredential()` for internal proxy use only (checks revoked/expired status).
 - **`src/services/policies.ts`** — Policy CRUD. Validates that referenced agent and credential exist on create. Exports `PolicyConstraints` interface used by the evaluation engine. Soft-delete via `isActive` flag.
-- **`src/services/policyEngine.ts`** — Policy evaluation engine. `evaluateRequest(agentId, credentialId, action, params, { dryRun? })` returns `ALLOW | DENY | ESCALATE` with reason. Fail-closed: no matching policy = DENY. Multiple policies use most-restrictive-wins (DENY > ESCALATE > ALLOW). Supports wildcard action matching (`transfers.*`), time windows via Luxon, rate limits and daily spend via Redis. `commitRateLimitAndSpend()` is exported for Phase 4 proxy to call after ALLOW.
+- **`src/services/policyEngine.ts`** — Policy evaluation engine. `evaluateRequest(agentId, credentialId, action, params, { dryRun? })` returns `ALLOW | DENY | ESCALATE` with reason. Fail-closed: no matching policy = DENY. Multiple policies use most-restrictive-wins (DENY > ESCALATE > ALLOW). Supports wildcard action matching (`transfers.*`), time windows via Luxon, rate limits and daily spend via Redis. `commitRateLimitAndSpend()` is called by the proxy service after a successful upstream call.
+- **`src/services/proxy.ts`** — Proxy orchestration. `executeProxy(input)` validates credential ownership, evaluates policy, decrypts credential, injects it into the outbound request, calls the external API, and commits rate limit/spend counters. Returns a discriminated union: `{ outcome: 'executed', upstream, meta }` or `{ outcome: 'escalated', policyId, reason }`. Includes SSRF protection (blocks localhost, link-local, cloud metadata IPs).
+- **`src/services/httpClient.ts`** — External HTTP client wrapper around Node.js built-in `fetch()`. Handles timeouts via `AbortController` (default 30s, max 120s), response body size limits (5MB), JSON/text parsing, and wraps network errors into `BadGatewayError`.
 
 ### Express middleware chain (order matters)
 

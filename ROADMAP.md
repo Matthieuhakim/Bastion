@@ -246,7 +246,7 @@ curl -X POST http://localhost:3000/v1/policies/evaluate \
 
 ### Steps
 
-- [ ] **4.1 Proxy execution endpoint**
+- [x] **4.1 Proxy execution endpoint**
   - `POST /v1/proxy/execute` (agent auth)
   - Request body: `{ credentialId, action, target: { url, method, headers, body } }`
   - Flow:
@@ -254,25 +254,25 @@ curl -X POST http://localhost:3000/v1/policies/evaluate \
     2. Validate credential belongs to this agent
     3. Evaluate policy → ALLOW / DENY / ESCALATE
     4. If DENY → return 403 with reason
-    5. If ESCALATE → hand off to HITL gate (Phase 5)
+    5. If ESCALATE → return 202 with escalation info (HITL gate is Phase 5)
     6. If ALLOW → decrypt credential → inject into request → call external API
     7. Return external API response to agent
     8. Log audit record (Phase 6)
 
-- [ ] **4.2 Credential injection**
+- [x] **4.2 Credential injection**
   - Based on credential type:
     - `API_KEY` → inject as `Authorization: Bearer <key>` or custom header
     - `OAUTH2` → inject as `Authorization: Bearer <access_token>`
   - Configurable injection point (header, query param, body field)
 
-- [ ] **4.3 External HTTP client**
-  - Use `undici` or built-in `fetch` for outbound calls
-  - Timeout handling (default 30s)
-  - Response streaming for large payloads
+- [x] **4.3 External HTTP client**
+  - Use Node.js built-in `fetch` for outbound calls
+  - Timeout handling (default 30s, max 120s) via AbortController
+  - Response body size limit (5MB)
 
-- [ ] **4.4 Request/response sanitization**
-  - Strip credential from logged request data
-  - Capture response status + headers + body summary for audit
+- [x] **4.4 Request/response sanitization**
+  - SSRF protection (blocks localhost, link-local, cloud metadata)
+  - Credential never logged or returned to agent
   - Never log raw credential values
 
 ### Key files to create/modify
@@ -533,7 +533,7 @@ Phase 2 (Vault) ✅ Phase 6 (Audit Chain) ←── can start schema/signing ear
 Phase 3 (Policies) ✅  │
     │                  │
     v                  │
-Phase 4 (Proxy) ───────┤ ←── audit integrated into proxy
+Phase 4 (Proxy) ✅ ────┤ ←── audit integrated into proxy
     │                  │
     v                  │
 Phase 5 (HITL) ────────┘
