@@ -198,13 +198,6 @@ Options: `header`, `query` (appends to URL), or `body` (adds a field to the requ
 
 **Dashboard** — Admin web UI for managing agents (kill-switch toggle), approving/denying HITL requests, browsing the audit log with filters, and revoking credentials. Run with `npm run dev:dashboard`.
 
-## Roadmap
-
-See [ROADMAP.md](ROADMAP.md) for the full plan. Current status:
-
-- **Phase 9 complete** — production deployment hardening, Docker packaging, and agent self-registration
-- **Next up: Phase 10** — real-time updates and dashboard policy management
-
 ## SDKs
 
 ### TypeScript
