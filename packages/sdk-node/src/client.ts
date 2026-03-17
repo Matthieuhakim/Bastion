@@ -47,7 +47,8 @@ export class BastionClient {
       (entry): entry is [string, string | number] => entry[1] !== undefined,
     );
     if (entries.length === 0) return '';
-    const qs = new URLSearchParams(entries.map(([k, v]) => [k, String(v)]));
+    const queryEntries: Array<[string, string]> = entries.map(([k, v]) => [k, String(v)]);
+    const qs = new URLSearchParams(queryEntries);
     return `?${qs.toString()}`;
   }
 

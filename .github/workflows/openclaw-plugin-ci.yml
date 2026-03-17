@@ -1,0 +1,172 @@
+name: OpenClaw Plugin CI
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/openclaw-plugin-ci.yml'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'packages/api/**'
+      - 'packages/openclaw-plugin/**'
+  pull_request:
+    paths:
+      - '.github/workflows/openclaw-plugin-ci.yml'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'packages/api/**'
+      - 'packages/openclaw-plugin/**'
+
+jobs:
+  plugin-unit-package:
+    name: Plugin Unit + Package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build plugin workspace
+        run: npm run build --workspace=packages/sdk-node && npm run build --workspace=packages/openclaw-plugin
+
+      - name: Run plugin unit tests
+        run: npm run test --workspace=packages/openclaw-plugin
+
+      - name: Lint plugin source
+        run: ./node_modules/.bin/eslint "packages/openclaw-plugin/src/**/*.ts"
+
+      - name: Verify published tarball
+        run: npm run ci:verify-tarball --workspace=packages/openclaw-plugin
+
+      - name: Pack plugin tarball
+        run: npm pack --workspace=packages/openclaw-plugin
+
+      - name: Upload plugin tarball artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bastion-plugin-tarball
+          path: bastion-ai-bastion-*.tgz
+          if-no-files-found: error
+
+  openclaw-compat-matrix:
+    name: OpenClaw Compat (${{ matrix.openclaw-version }})
+    runs-on: ubuntu-latest
+    needs: plugin-unit-package
+    strategy:
+      fail-fast: false
+      matrix:
+        openclaw-version:
+          - 2026.2.12
+          - 2026.3.13
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build SDK dependency
+        run: npm run build --workspace=packages/sdk-node
+
+      - name: Download plugin tarball artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: bastion-plugin-tarball
+          path: .artifacts/bastion-plugin
+
+      - name: Resolve tarball path
+        run: echo "PLUGIN_TARBALL=$(ls .artifacts/bastion-plugin/*.tgz)" >> "$GITHUB_ENV"
+
+      - name: OpenClaw install smoke test
+        env:
+          OPENCLAW_VERSION: ${{ matrix.openclaw-version }}
+          PLUGIN_TARBALL: ${{ env.PLUGIN_TARBALL }}
+        run: bash packages/openclaw-plugin/scripts/ci-openclaw-install-smoke.sh
+
+      - name: OpenClaw config validation test
+        env:
+          OPENCLAW_VERSION: ${{ matrix.openclaw-version }}
+          PLUGIN_TARBALL: ${{ env.PLUGIN_TARBALL }}
+        run: bash packages/openclaw-plugin/scripts/ci-openclaw-config-validate.sh
+
+  plugin-e2e-dockerized:
+    name: Plugin E2E (Dockerized)
+    runs-on: ubuntu-latest
+    needs:
+      - plugin-unit-package
+      - openclaw-compat-matrix
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: bastion
+          POSTGRES_PASSWORD: bastion
+          POSTGRES_DB: bastion
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U bastion -d bastion"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://bastion:bastion@localhost:5432/bastion
+      REDIS_URL: redis://localhost:6379
+      MASTER_KEY: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      PROJECT_API_KEY: test-project-api-key
+      NODE_ENV: test
+      BASE_URL: http://127.0.0.1:3000
+      OPENCLAW_VERSION: 2026.3.13
+      OPENCLAW_GATEWAY_TOKEN: test-openclaw-gateway-token
+      OPENCLAW_GATEWAY_PORT: 18789
+      BASTION_PORT: 3000
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build SDK dependency
+        run: npm run build --workspace=packages/sdk-node
+
+      - name: Download plugin tarball artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: bastion-plugin-tarball
+          path: .artifacts/bastion-plugin
+
+      - name: Resolve tarball path
+        run: echo "PLUGIN_TARBALL=$(ls .artifacts/bastion-plugin/*.tgz)" >> "$GITHUB_ENV"
+
+      - name: Run plugin E2E
+        env:
+          PLUGIN_TARBALL: ${{ env.PLUGIN_TARBALL }}
+        run: npm run test:e2e --workspace=packages/openclaw-plugin

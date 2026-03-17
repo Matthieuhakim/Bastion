@@ -1,0 +1,14 @@
+{
+  "tool": "bastion_fetch",
+  "args": {
+    "url": "__ALLOWED_URL__",
+    "method": "POST",
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "amount": 5000,
+      "currency": "usd"
+    }
+  }
+}

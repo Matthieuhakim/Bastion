@@ -1,0 +1,70 @@
+{
+  "name": "@bastion-ai/bastion",
+  "version": "0.1.0",
+  "description": "OpenClaw plugin for Bastion — adds a Bastion-backed HTTP tool and blocks direct bypasses for protected URLs",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "homepage": "https://github.com/Matthieuhakim/Bastion#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Matthieuhakim/Bastion.git",
+    "directory": "packages/openclaw-plugin"
+  },
+  "bugs": {
+    "url": "https://github.com/Matthieuhakim/Bastion/issues"
+  },
+  "keywords": [
+    "ai",
+    "agents",
+    "security",
+    "proxy",
+    "audit",
+    "openclaw",
+    "plugin",
+    "typescript"
+  ],
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "openclaw": {
+    "extensions": ["./dist/index.js"],
+    "install": {
+      "npmSpec": "@bastion-ai/bastion",
+      "defaultChoice": "npm"
+    }
+  },
+  "files": ["dist", "openclaw.plugin.json"],
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "peerDependencies": {
+    "openclaw": ">=2026.2.12"
+  },
+  "scripts": {
+    "clean": "node --eval \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
+    "build": "npm run clean && tsc",
+    "ci:verify-tarball": "bash ./scripts/ci-verify-tarball.sh",
+    "dev": "tsc --watch",
+    "prepack": "npm run build",
+    "test": "vitest run",
+    "test:e2e": "bash ./scripts/ci-openclaw-e2e.sh",
+    "test:integration": "bash ./scripts/ci-openclaw-install-smoke.sh && bash ./scripts/ci-openclaw-config-validate.sh",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@bastion-ai/sdk": "^0.1.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}

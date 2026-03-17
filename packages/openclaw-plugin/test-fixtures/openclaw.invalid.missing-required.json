@@ -1,0 +1,22 @@
+{
+  "gateway": {
+    "mode": "local",
+    "bind": "loopback",
+    "port": 18789,
+    "auth": {
+      "mode": "token",
+      "token": "__OPENCLAW_GATEWAY_TOKEN__"
+    }
+  },
+  "plugins": {
+    "allow": ["bastion"],
+    "entries": {
+      "bastion": {
+        "enabled": true,
+        "config": {
+          "serverUrl": "__BASTION_SERVER_URL__"
+        }
+      }
+    }
+  }
+}

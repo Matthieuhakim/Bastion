@@ -2,8 +2,7 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "./dist",
-    "rootDir": "./src",
-    "lib": ["ES2024", "DOM", "DOM.Iterable"]
+    "rootDir": "./src"
   },
   "include": ["src/**/*"],
   "exclude": ["src/__test__/**/*"]

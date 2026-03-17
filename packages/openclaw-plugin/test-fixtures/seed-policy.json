@@ -1,0 +1,5 @@
+{
+  "agentId": "__AGENT_ID__",
+  "credentialId": "__CREDENTIAL_ID__",
+  "allowedActions": ["__ACTION__"]
+}
