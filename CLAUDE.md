@@ -26,6 +26,7 @@ npm run format       # Prettier write
 npm run format:check # Prettier check (CI-safe)
 npm test             # Run unit tests (Vitest, fast, no DB needed)
 npm run test:integration  # Run integration tests (needs Docker postgres + Redis)
+npm run db:generate  # Generate Prisma client (needed after npm ci or schema changes)
 npm run db:migrate   # Run Prisma migrations (packages/api)
 npm run db:studio    # Open Prisma Studio GUI
 docker compose up -d # Start PostgreSQL 17 + Redis 7
@@ -106,6 +107,16 @@ Two-tier test setup in `packages/api/`:
 - **Integration tests** — in `src/__integration__/`. Require Docker postgres + Redis running. Use a separate `bastion_test` database (created automatically by the global setup file).
 
 Both tiers use `supertest` against `createApp()` directly — no HTTP server is started. Setup files (`src/__test__/setup.ts`, `setup.integration.ts`) configure env vars. Integration tests clean the DB and Redis between runs via `src/__test__/helpers/db.ts` (`cleanDatabase()` deletes audit records first, then policies → credentials → agents; `cleanRedis()` flushes the test Redis DB).
+
+### CI pipeline
+
+CI runs on every PR and push to `main` (`.github/workflows/ci.yml`). Three jobs:
+
+1. **Lint, Build, Unit Tests** — `npm run db:generate` → `format:check` → `lint` → `build` → `test`
+2. **Integration Tests** — requires Postgres + Redis services, runs `test:integration`
+3. **Python SDK Tests** — `pytest` on `packages/sdk-python`
+
+Format check runs before lint — if Prettier fails, fix with `npm run format` before pushing.
 
 ## Code Conventions
 
