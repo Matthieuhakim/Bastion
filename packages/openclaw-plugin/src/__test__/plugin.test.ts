@@ -84,28 +84,43 @@ beforeEach(() => {
 });
 
 describe('bastionPlugin', () => {
-  it('throws on missing serverUrl', async () => {
+  it('stays idle when no config is provided', async () => {
+    const { api, handlers, services, tools, logs } = makeApi();
+    await bastionPlugin(api);
+
+    expect(handlers['before_tool_call']).toBeUndefined();
+    expect(tools).toHaveLength(0);
+    expect(services.find((s) => s.id === 'bastion')).toBeDefined();
+    expect(logs.some((entry) => entry.msg.includes('not configured'))).toBe(true);
+  });
+
+  it('stays idle when plugin config is empty', async () => {
+    const { api, handlers, services, tools, logs } = makeApi({});
+    await bastionPlugin(api);
+
+    expect(handlers['before_tool_call']).toBeUndefined();
+    expect(tools).toHaveLength(0);
+    expect(services.find((s) => s.id === 'bastion')).toBeDefined();
+    expect(logs.some((entry) => entry.msg.includes('not configured'))).toBe(true);
+  });
+
+  it('throws on missing serverUrl in partial config', async () => {
     const { api } = makeApi({ agentSecret: 'bst_x', rules: [{}] });
-    await expect(bastionPlugin(api)).rejects.toThrow('config.serverUrl');
+    expect(() => bastionPlugin(api)).toThrow('config.serverUrl');
   });
 
-  it('throws on missing agentSecret', async () => {
+  it('throws on missing agentSecret in partial config', async () => {
     const { api } = makeApi({ serverUrl: 'http://localhost:3000', rules: [{}] });
-    await expect(bastionPlugin(api)).rejects.toThrow('config.agentSecret');
+    expect(() => bastionPlugin(api)).toThrow('config.agentSecret');
   });
 
-  it('throws on empty rules array', async () => {
+  it('throws on empty rules array in partial config', async () => {
     const { api } = makeApi({
       serverUrl: 'http://localhost:3000',
       agentSecret: 'bst_x',
       rules: [],
     });
-    await expect(bastionPlugin(api)).rejects.toThrow('config.rules');
-  });
-
-  it('throws on missing config', async () => {
-    const { api } = makeApi();
-    await expect(bastionPlugin(api)).rejects.toThrow('config is required');
+    expect(() => bastionPlugin(api)).toThrow('config.rules');
   });
 
   it('registers bastion_fetch tool, before_tool_call hook, and service', async () => {
@@ -113,7 +128,7 @@ describe('bastionPlugin', () => {
     await bastionPlugin(api);
 
     expect(handlers['before_tool_call']).toHaveLength(1);
-    expect(services.find((s) => s.id === 'bastion-fetch')).toBeDefined();
+    expect(services.find((s) => s.id === 'bastion')).toBeDefined();
     expect(tools.find((tool) => tool.name === BASTION_FETCH_TOOL_NAME)).toBeDefined();
   });
 

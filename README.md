@@ -175,6 +175,51 @@ By default, `API_KEY` and `OAUTH2` credentials are injected as `Authorization: B
 
 Options: `header`, `query` (appends to URL), or `body` (adds a field to the request body).
 
+## OpenClaw Plugin
+
+Bastion also ships an OpenClaw plugin for routing protected outbound tool calls through Bastion.
+
+- npm package: `@bastion-ai/bastion`
+- OpenClaw plugin id: `bastion`
+- tool name exposed to agents: `bastion_fetch`
+
+Install it with:
+
+```bash
+openclaw plugins install @bastion-ai/bastion
+```
+
+Then configure it in `openclaw.json`:
+
+```json
+{
+  "plugins": {
+    "allow": ["bastion"],
+    "entries": {
+      "bastion": {
+        "enabled": true,
+        "config": {
+          "serverUrl": "http://localhost:3000",
+          "agentSecret": { "$env": "BASTION_AGENT_SECRET" },
+          "rules": [
+            {
+              "tool": "web_fetch",
+              "urlPattern": "https://api.stripe.com/**",
+              "credentialId": "cred_abc123",
+              "action": "stripe.charges"
+            }
+          ]
+        }
+      }
+    }
+  }
+}
+```
+
+For protected domains, agents should call `bastion_fetch` instead of direct tools like `web_fetch`. The plugin will match the URL against configured rules, call Bastion's proxy API, and optionally block direct bypasses for tools listed in `tool`.
+
+See [packages/openclaw-plugin/README.md](packages/openclaw-plugin/README.md) for full installation, configuration, CI, and troubleshooting details.
+
 ## Features
 
 **Credential Vault** — Envelope encryption (AES-256-GCM + HKDF). Each credential gets its own data encryption key. Raw values are never returned over the API or stored in logs.
@@ -250,6 +295,7 @@ Both sync and async clients available. See [packages/sdk-python/README.md](packa
 packages/
   api/          Express 5 + TypeScript API server (the core)
   dashboard/    Vite + React admin dashboard
+  openclaw-plugin/ OpenClaw plugin (`@bastion-ai/bastion`)
   sdk-node/     TypeScript SDK (zero runtime deps)
   sdk-python/   Python SDK (httpx)
 ```

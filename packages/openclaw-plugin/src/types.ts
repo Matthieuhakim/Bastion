@@ -59,7 +59,7 @@ export type BeforeCallResult =
 // ── Plugin Config ─────────────────────────────────────────────────────────────
 
 /** Resolves to a secret string at runtime. */
-export type SecretValue = string | { $env: string } | { $file: string } | { $exec: string };
+export type SecretValue = string | { $env: string } | { $file: string };
 
 export interface InjectionConfig {
   location: 'header' | 'query' | 'body';

@@ -1,6 +1,6 @@
 {
-  "id": "bastion-fetch",
-  "name": "Bastion Fetch",
+  "id": "bastion",
+  "name": "Bastion",
   "version": "0.1.0",
   "description": "Secure outbound HTTP requests with Bastion — credential vault, policy engine, HITL gate, audit trail",
   "uiHints": {
@@ -23,14 +23,13 @@
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
-    "required": ["serverUrl", "agentSecret", "rules"],
     "properties": {
       "serverUrl": {
         "type": "string",
         "description": "URL of your Bastion server (e.g. http://localhost:3000)"
       },
       "agentSecret": {
-        "description": "Agent secret (bst_... token). Supports $env, $file, $exec SecretRef."
+        "description": "Agent secret (bst_... token). Supports plain strings, $env, and $file SecretRef."
       },
       "rules": {
         "type": "array",

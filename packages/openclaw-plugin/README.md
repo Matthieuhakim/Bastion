@@ -1,4 +1,4 @@
-# @bastion-ai/openclaw-plugin
+# @bastion-ai/bastion
 
 OpenClaw plugin for [Bastion](https://github.com/Matthieuhakim/Bastion).
 
@@ -6,7 +6,7 @@ It ships a `bastion_fetch` tool that sends outbound HTTP requests through Bastio
 
 ## Compatibility
 
-- OpenClaw `2026.3.13+`
+- OpenClaw `2026.2.12+`
 - Node.js `22+`
 - A running Bastion server
 
@@ -17,10 +17,11 @@ This plugin targets the current released OpenClaw runtime by registering an expl
 ### From npm
 
 ```bash
-openclaw plugins install @bastion-ai/openclaw-plugin
+openclaw plugins install @bastion-ai/bastion
 ```
 
-The installed plugin ID is `bastion-fetch`, so configure it under `plugins.entries["bastion-fetch"]`.
+The installed plugin ID is `bastion`, so configure it under `plugins.entries["bastion"]`.
+The package is install-first: it loads in an idle state until you add `serverUrl`, `agentSecret`, and at least one rule.
 
 ### Local development / pre-publish
 
@@ -35,7 +36,7 @@ Or install a packed tarball:
 
 ```bash
 npm pack --workspace=packages/openclaw-plugin
-openclaw plugins install ./packages/openclaw-plugin/bastion-ai-openclaw-plugin-0.1.0.tgz
+openclaw plugins install ./bastion-ai-bastion-0.1.0.tgz
 ```
 
 ## Bastion Setup
@@ -74,8 +75,9 @@ Add this to `openclaw.json`:
 ```json
 {
   "plugins": {
+    "allow": ["bastion"],
     "entries": {
-      "bastion-fetch": {
+      "bastion": {
         "enabled": true,
         "config": {
           "serverUrl": "http://localhost:3000",
@@ -156,7 +158,6 @@ That keeps the workflow deterministic and lets the plugin enforce policy cleanly
 | Plain string | `"bst_abc123..."` |
 | Environment variable | `{ "$env": "BASTION_AGENT_SECRET" }` |
 | File | `{ "$file": "/run/secrets/bastion_secret" }` |
-| Command | `{ "$exec": "vault read -field=secret secret/bastion" }` |
 
 ## Rule Options
 
@@ -176,6 +177,9 @@ Rules are evaluated in order. Put more specific patterns before broader wildcard
 **Plugin logs "server is unreachable"**  
 Bastion is not running or not reachable from OpenClaw. Start it with `docker compose up -d && npm run dev`.
 
+**`openclaw plugins install` succeeds but the plugin looks idle**  
+That is expected until you provide `serverUrl`, `agentSecret`, and `rules`. The plugin intentionally installs cleanly before configuration so npm installs do not create invalid OpenClaw state.
+
 **`bastion_fetch` returns "Blocked by Bastion policy"**  
 The agent's policy denied the action. Check Bastion policies or audit entries.
 
@@ -184,3 +188,19 @@ The request hit a HITL rule and Bastion is waiting for approval. Review pending 
 
 **Direct `web_fetch` calls are blocked**  
 That is expected when a matching rule defines `tool: "web_fetch"`. Use `bastion_fetch` instead.
+
+## Release Gates
+
+Before publishing a new version, make sure all of these pass:
+
+- `npm run test --workspace=packages/openclaw-plugin`
+- `npm run test:integration --workspace=packages/openclaw-plugin`
+- `npm run test:e2e --workspace=packages/openclaw-plugin`
+- `npm run ci:verify-tarball --workspace=packages/openclaw-plugin`
+- GitHub Actions workflow `.github/workflows/openclaw-plugin-ci.yml`
+
+That workflow enforces three release-confidence stages:
+
+- `Plugin Unit + Package`: build, unit tests, lint, and tarball verification
+- `OpenClaw Compat`: install/config validation against OpenClaw `2026.2.12` and `2026.3.13`
+- `Plugin E2E (Dockerized)`: real Bastion API + OpenClaw gateway exercise of `bastion_fetch`, audit logging, and protected-tool blocking

@@ -1,5 +1,5 @@
 {
-  "name": "@bastion-ai/openclaw-plugin",
+  "name": "@bastion-ai/bastion",
   "version": "0.1.0",
   "description": "OpenClaw plugin for Bastion — adds a Bastion-backed HTTP tool and blocks direct bypasses for protected URLs",
   "license": "MIT",
@@ -34,7 +34,7 @@
   "openclaw": {
     "extensions": ["./dist/index.js"],
     "install": {
-      "npmSpec": "@bastion-ai/openclaw-plugin",
+      "npmSpec": "@bastion-ai/bastion",
       "defaultChoice": "npm"
     }
   },
@@ -47,14 +47,17 @@
     "node": ">=22.0.0"
   },
   "peerDependencies": {
-    "openclaw": ">=2026.3.13"
+    "openclaw": ">=2026.2.12"
   },
   "scripts": {
     "clean": "node --eval \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
     "build": "npm run clean && tsc",
+    "ci:verify-tarball": "bash ./scripts/ci-verify-tarball.sh",
     "dev": "tsc --watch",
     "prepack": "npm run build",
     "test": "vitest run",
+    "test:e2e": "bash ./scripts/ci-openclaw-e2e.sh",
+    "test:integration": "bash ./scripts/ci-openclaw-install-smoke.sh && bash ./scripts/ci-openclaw-config-validate.sh",
     "test:watch": "vitest"
   },
   "dependencies": {

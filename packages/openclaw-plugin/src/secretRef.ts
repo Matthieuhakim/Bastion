@@ -1,12 +1,11 @@
 import { readFileSync } from 'fs';
-import { execSync } from 'child_process';
 import type { SecretValue } from './types.js';
 
 /**
  * Resolves a SecretValue to a plain string at runtime.
- * Supports plain strings, $env, $file, and $exec sources.
+ * Supports plain strings, $env, and $file sources.
  */
-export async function resolveSecret(ref: SecretValue): Promise<string> {
+export function resolveSecret(ref: SecretValue): string {
   let value: string;
 
   if (typeof ref === 'string') {
@@ -21,8 +20,7 @@ export async function resolveSecret(ref: SecretValue): Promise<string> {
     const contents = readFileSync(ref.$file, 'utf8');
     value = contents.trim();
   } else {
-    const stdout = execSync(ref.$exec, { encoding: 'utf8' });
-    value = stdout.trim();
+    throw new Error('Unsupported secret reference');
   }
 
   if (!value) {

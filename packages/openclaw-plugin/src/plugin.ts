@@ -47,11 +47,20 @@ const BASTION_FETCH_TOOL_SCHEMA = {
   },
 } satisfies Record<string, unknown>;
 
-function validateConfig(config: unknown): BastionPluginConfig {
-  if (!config || typeof config !== 'object') {
-    throw new Error('Bastion plugin: config is required');
+function validateConfig(config: unknown): BastionPluginConfig | null {
+  if (config === undefined || config === null) {
+    return null;
+  }
+  if (typeof config !== 'object' || Array.isArray(config)) {
+    throw new Error('Bastion plugin: config must be an object');
   }
   const c = config as Record<string, unknown>;
+  const hasAnyConfigField =
+    c['serverUrl'] !== undefined || c['agentSecret'] !== undefined || c['rules'] !== undefined;
+
+  if (!hasAnyConfigField) {
+    return null;
+  }
 
   if (!c['serverUrl'] || typeof c['serverUrl'] !== 'string') {
     throw new Error('Bastion plugin: config.serverUrl is required and must be a string');
@@ -128,12 +137,23 @@ function normalizeExecutionError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error));
 }
 
-export default async function bastionPlugin(api: OpenClawPluginApi): Promise<void> {
+export default function bastionPlugin(api: OpenClawPluginApi): void {
   // 1. Validate config from the released OpenClaw plugin API surface.
   const pluginConfig = validateConfig(api.pluginConfig);
+  if (!pluginConfig) {
+    api.logger.info(
+      'Bastion plugin installed but not configured; skipping tool and hook registration.',
+    );
+    api.registerService({
+      id: 'bastion',
+      start: () => api.logger.info('Bastion plugin idle (no config)'),
+      stop: () => api.logger.info('Bastion plugin stopped'),
+    });
+    return;
+  }
 
   // 2. Resolve agent secret
-  const agentSecret = await resolveSecret(pluginConfig.agentSecret);
+  const agentSecret = resolveSecret(pluginConfig.agentSecret);
 
   // 3. Compile rules (glob → regex) at startup
   const compiledRules = compileRules(pluginConfig.rules);
@@ -204,8 +224,8 @@ export default async function bastionPlugin(api: OpenClawPluginApi): Promise<voi
 
   // 8. Register service for lifecycle awareness
   api.registerService({
-    id: 'bastion-fetch',
-    start: () => api.logger.info('Bastion fetch plugin active'),
-    stop: () => api.logger.info('Bastion fetch plugin stopped'),
+    id: 'bastion',
+    start: () => api.logger.info('Bastion plugin active'),
+    stop: () => api.logger.info('Bastion plugin stopped'),
   });
 }
