@@ -182,8 +182,7 @@ export default function bastionPlugin(api: OpenClawPluginApi): void {
   api.registerTool({
     name: BASTION_FETCH_TOOL_NAME,
     label: 'Bastion Fetch',
-    description:
-      'Execute outbound HTTP requests through Bastion using configured URL rules.',
+    description: 'Execute outbound HTTP requests through Bastion using configured URL rules.',
     parameters: BASTION_FETCH_TOOL_SCHEMA,
     async execute(_toolCallId: string | undefined, params: unknown) {
       const input = normalizeFetchInput(params);

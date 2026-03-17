@@ -81,7 +81,11 @@ describe('matchRule — explicit tool blocking', () => {
 
   it('ignores rules without an explicit tool', () => {
     const rulesWithToolless = compileRules([toollessRule]);
-    const match = matchRule('web_fetch', { url: 'https://api.example.com/v1/data' }, rulesWithToolless);
+    const match = matchRule(
+      'web_fetch',
+      { url: 'https://api.example.com/v1/data' },
+      rulesWithToolless,
+    );
     expect(match).toBeNull();
   });
 });

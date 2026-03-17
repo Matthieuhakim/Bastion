@@ -36,7 +36,7 @@ jobs:
         run: npm ci
 
       - name: Build plugin workspace
-        run: npm run build --workspace=packages/openclaw-plugin
+        run: npm run build --workspace=packages/sdk-node && npm run build --workspace=packages/openclaw-plugin
 
       - name: Run plugin unit tests
         run: npm run test --workspace=packages/openclaw-plugin

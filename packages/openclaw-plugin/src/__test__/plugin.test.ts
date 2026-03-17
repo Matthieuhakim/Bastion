@@ -1,10 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import bastionPlugin, { BASTION_FETCH_TOOL_NAME } from '../plugin.js';
-import type {
-  OpenClawPluginApi,
-  OpenClawToolDefinition,
-  OpenClawToolResult,
-} from '../types.js';
+import type { OpenClawPluginApi, OpenClawToolDefinition, OpenClawToolResult } from '../types.js';
 
 // Mock BastionBridge to avoid real HTTP calls.
 vi.mock('../bastionBridge.js', () => ({
@@ -46,7 +42,9 @@ function makeApi(pluginConfig?: Record<string, unknown>) {
     return handler({ toolName, params });
   };
 
-  const executeRegisteredTool = async (params: Record<string, unknown>): Promise<OpenClawToolResult> => {
+  const executeRegisteredTool = async (
+    params: Record<string, unknown>,
+  ): Promise<OpenClawToolResult> => {
     const tool = tools.find((entry) => entry.name === BASTION_FETCH_TOOL_NAME);
     if (!tool) throw new Error(`${BASTION_FETCH_TOOL_NAME} not registered`);
     return tool.execute(undefined, params);

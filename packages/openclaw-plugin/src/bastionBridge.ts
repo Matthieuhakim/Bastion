@@ -55,13 +55,11 @@ export class BastionBridge {
       });
     } catch (error) {
       if (error instanceof BastionForbiddenError) {
-        throw new BastionBlockedError(error.message);
+        throw new BastionBlockedError(getErrorMessage(error));
       }
       // Network-level failure (TypeError from fetch, or any non-HTTP error)
       if (error instanceof TypeError || isNetworkError(error)) {
-        throw new BastionUnreachableError(
-          `Bastion server unreachable: ${error instanceof Error ? error.message : String(error)}`,
-        );
+        throw new BastionUnreachableError(`Bastion server unreachable: ${getErrorMessage(error)}`);
       }
       throw error;
     }
@@ -86,4 +84,8 @@ function isNetworkError(error: unknown): boolean {
     error.message.includes('ENOTFOUND') ||
     error.message.includes('fetch failed')
   );
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
