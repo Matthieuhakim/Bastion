@@ -40,13 +40,40 @@ ensure_plugin_tarball() {
 
   printf '==> %s\n' "Packing plugin tarball" >&2
   local pack_json
+  local filename
   pushd "$REPO_DIR" >/dev/null
-  pack_json=$(npm pack --workspace=packages/openclaw-plugin --json)
+  # Fallback path for local runs that don't provide a prebuilt tarball.
+  # Build sdk-node first so @bastion-ai/bastion can resolve @bastion-ai/sdk types.
+  if ! npm run build --workspace=packages/sdk-node >/dev/null; then
+    popd >/dev/null
+    fail 'Failed to build packages/sdk-node before packing plugin tarball'
+  fi
+  if ! pack_json=$(npm pack --workspace=packages/openclaw-plugin --json); then
+    popd >/dev/null
+    fail 'Failed to pack plugin tarball'
+  fi
   popd >/dev/null
 
-  local filename
-  filename=$(node -e 'const parsed=JSON.parse(process.argv[1]); process.stdout.write(parsed[0].filename);' "$pack_json")
-  printf '%s\n' "$REPO_DIR/$filename"
+  if ! filename=$(
+    node -e 'const parsed=JSON.parse(process.argv[1]); const name=parsed?.[0]?.filename; if(!name){ process.exit(1); } process.stdout.write(name);' "$pack_json"
+  ); then
+    fail "Failed to parse tarball filename from npm pack output: $pack_json"
+  fi
+
+  local tarball_path="$REPO_DIR/$filename"
+  if [[ ! -f "$tarball_path" ]]; then
+    fail "Expected packed tarball to exist at: $tarball_path"
+  fi
+
+  printf '%s\n' "$tarball_path"
+}
+
+cleanup_generated_tarball() {
+  local tarball_path=${1:-}
+  local should_cleanup=${2:-0}
+  if [[ "$should_cleanup" -eq 1 && -n "$tarball_path" && -f "$tarball_path" ]]; then
+    rm -f "$tarball_path"
+  fi
 }
 
 run_openclaw() {

@@ -7,8 +7,14 @@ PACKAGE_DIR=$(cd "$SCRIPT_DIR/.." && pwd)
 
 source "$SCRIPT_DIR/ci-common.sh"
 
+INPUT_PLUGIN_TARBALL=${PLUGIN_TARBALL:-}
 TARBALL_PATH=$(ensure_plugin_tarball "${PLUGIN_TARBALL:-}")
 [[ -f "$TARBALL_PATH" ]] || fail "Tarball not found: $TARBALL_PATH"
+GENERATED_TARBALL=0
+if [[ -z "$INPUT_PLUGIN_TARBALL" ]]; then
+  GENERATED_TARBALL=1
+fi
+trap 'cleanup_generated_tarball "$TARBALL_PATH" "$GENERATED_TARBALL"' EXIT
 
 log "Inspecting tarball contents"
 contents=$(tar -tzf "$TARBALL_PATH")

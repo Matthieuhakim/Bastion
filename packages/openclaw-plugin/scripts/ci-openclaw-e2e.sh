@@ -17,7 +17,12 @@ export BYPASS_URL=${BYPASS_URL:-https://postman-echo.com/get?source=bastion-ci}
 export NODE_ENV=${NODE_ENV:-test}
 
 require_env DATABASE_URL REDIS_URL MASTER_KEY PROJECT_API_KEY
+INPUT_PLUGIN_TARBALL=${PLUGIN_TARBALL:-}
 PLUGIN_TARBALL=$(ensure_plugin_tarball "${PLUGIN_TARBALL:-}")
+GENERATED_TARBALL=0
+if [[ -z "$INPUT_PLUGIN_TARBALL" ]]; then
+  GENERATED_TARBALL=1
+fi
 
 setup_openclaw_env
 
@@ -52,6 +57,7 @@ cleanup() {
     fi
   fi
 
+  cleanup_generated_tarball "$PLUGIN_TARBALL" "$GENERATED_TARBALL"
   rm -rf "$tmp_dir" "$OPENCLAW_STATE_DIR"
   exit "$exit_code"
 }

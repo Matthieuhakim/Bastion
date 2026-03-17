@@ -1,0 +1,39 @@
+name: Publish OpenClaw Plugin
+
+on:
+  release:
+    types:
+      - published
+
+jobs:
+  publish:
+    name: Publish @bastion-ai/bastion
+    if: startsWith(github.event.release.tag_name, 'openclaw-plugin-v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build SDK dependency
+        run: npm run build --workspace=packages/sdk-node
+
+      - name: Build OpenClaw plugin
+        run: npm run build --workspace=packages/openclaw-plugin
+
+      - name: Publish package
+        working-directory: packages/openclaw-plugin
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish

@@ -76,6 +76,9 @@ jobs:
         with:
           node-version: 22
 
+      - name: Build SDK dependency
+        run: npm run build --workspace=packages/sdk-node
+
       - name: Download plugin tarball artifact
         uses: actions/download-artifact@v4
         with:
@@ -150,6 +153,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Build SDK dependency
+        run: npm run build --workspace=packages/sdk-node
 
       - name: Download plugin tarball artifact
         uses: actions/download-artifact@v4

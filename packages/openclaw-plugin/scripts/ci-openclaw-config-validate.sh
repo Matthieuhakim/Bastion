@@ -13,7 +13,13 @@ export URL_PATTERN=${URL_PATTERN:-https://postman-echo.com/**}
 export ACTION=${ACTION:-postman.echo}
 export CREDENTIAL_ID=${CREDENTIAL_ID:-cred_ci_test}
 
+INPUT_PLUGIN_TARBALL=${PLUGIN_TARBALL:-}
 PLUGIN_TARBALL=$(ensure_plugin_tarball "${PLUGIN_TARBALL:-}")
+GENERATED_TARBALL=0
+if [[ -z "$INPUT_PLUGIN_TARBALL" ]]; then
+  GENERATED_TARBALL=1
+fi
+trap 'cleanup_generated_tarball "$PLUGIN_TARBALL" "$GENERATED_TARBALL"' EXIT
 
 setup_openclaw_env
 

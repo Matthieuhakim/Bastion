@@ -6,7 +6,13 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/ci-common.sh"
 
 export OPENCLAW_VERSION=${OPENCLAW_VERSION:-2026.3.13}
+INPUT_PLUGIN_TARBALL=${PLUGIN_TARBALL:-}
 PLUGIN_TARBALL=$(ensure_plugin_tarball "${PLUGIN_TARBALL:-}")
+GENERATED_TARBALL=0
+if [[ -z "$INPUT_PLUGIN_TARBALL" ]]; then
+  GENERATED_TARBALL=1
+fi
+trap 'cleanup_generated_tarball "$PLUGIN_TARBALL" "$GENERATED_TARBALL"' EXIT
 
 setup_openclaw_env
 
