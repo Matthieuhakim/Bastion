@@ -375,3 +375,90 @@ describe('POST /v1/proxy/execute', () => {
     });
   });
 });
+
+describe('POST /v1/proxy/fetch', () => {
+  it('routes a vendor-url request through the matched credential metadata', async () => {
+    const agent = await createTestAgent();
+    const credential = await createTestCredential(agent.id, {
+      metadata: {
+        provider: 'openai',
+        actionPrefix: 'openai',
+        targetHosts: ['api.openai.com'],
+      },
+    });
+    await createTestPolicy(agent.id, credential.id, {
+      allowedActions: ['openai.*'],
+    });
+
+    mockUpstreamResponse(200, { id: 'chatcmpl_123' });
+
+    const res = await agentAuthed('post', '/v1/proxy/fetch', agent.agentSecret).send({
+      url: 'https://api.openai.com/v1/chat/completions',
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: { model: 'gpt-5.4-mini' },
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body.upstream.status).toBe(200);
+    expect(res.body.upstream.body).toEqual({ id: 'chatcmpl_123' });
+    expect(res.body.meta.credentialId).toBe(credential.id);
+    expect(res.body.meta.action).toBe('openai.post.v1.chat.completions');
+
+    const [, fetchInit] = mockFetch.mock.calls[0];
+    expect(fetchInit.headers['Authorization']).toBe('Bearer sk_test_abc123xyz789');
+  });
+
+  it('supports explicit credentialId with routing metadata for custom injections', async () => {
+    const agent = await createTestAgent();
+    const credential = await createTestCredential(agent.id, {
+      type: 'CUSTOM',
+      metadata: {
+        provider: 'internal-api',
+        actionPrefix: 'internal',
+        targetHosts: ['api.internal.example'],
+        injection: {
+          location: 'header',
+          key: 'X-Api-Key',
+        },
+      },
+      value: 'internal_secret',
+    });
+    await createTestPolicy(agent.id, credential.id, {
+      allowedActions: ['internal.*'],
+    });
+
+    mockUpstreamResponse(200, { ok: true });
+
+    const res = await agentAuthed('post', '/v1/proxy/fetch', agent.agentSecret).send({
+      credentialId: credential.id,
+      url: 'https://api.internal.example/v1/jobs',
+      method: 'GET',
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body.meta.action).toBe('internal.get.v1.jobs');
+    const [, fetchInit] = mockFetch.mock.calls[0];
+    expect(fetchInit.headers['X-Api-Key']).toBe('internal_secret');
+  });
+
+  it('fails closed when no credential routing matches the target hostname', async () => {
+    const agent = await createTestAgent();
+    await createTestCredential(agent.id, {
+      metadata: {
+        provider: 'openai',
+        actionPrefix: 'openai',
+        targetHosts: ['api.openai.com'],
+      },
+    });
+
+    const res = await agentAuthed('post', '/v1/proxy/fetch', agent.agentSecret).send({
+      url: 'https://api.anthropic.com/v1/messages',
+      method: 'POST',
+    });
+
+    expect(res.status).toBe(404);
+    expect(res.body.error.message).toContain('No credential routing found');
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+});

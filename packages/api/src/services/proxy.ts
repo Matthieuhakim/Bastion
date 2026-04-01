@@ -1,6 +1,10 @@
 import type { Credential, CredentialType } from '@prisma/client';
 import { prisma } from './db.js';
-import { decryptCredential } from './credentials.js';
+import {
+  decryptCredential,
+  getCredentialRoutingMetadata,
+  resolveCredentialForTarget,
+} from './credentials.js';
 import { evaluateRequest, commitRateLimitAndSpend } from './policyEngine.js';
 import type { EvaluationParams } from './policyEngine.js';
 import { callExternalApi } from './httpClient.js';
@@ -29,6 +33,19 @@ export interface ProxyExecuteInput {
   action: string;
   params?: EvaluationParams;
   target: ProxyTarget;
+  injection?: InjectionConfig;
+  timeout?: number;
+}
+
+export interface ProxyFetchInput {
+  agentId: string;
+  url: string;
+  method?: string;
+  headers?: Record<string, string>;
+  body?: unknown;
+  params?: EvaluationParams;
+  action?: string;
+  credentialId?: string;
   injection?: InjectionConfig;
   timeout?: number;
 }
@@ -96,6 +113,37 @@ function validateTargetUrl(url: string): URL {
   return parsed;
 }
 
+function slugifyActionSegment(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '.')
+    .replace(/^\.+|\.+$/g, '')
+    .replace(/\.{2,}/g, '.');
+}
+
+function inferActionFromTarget(url: string, method: string, actionPrefix: string): string {
+  const parsed = new URL(url);
+  const pathSegments = parsed.pathname
+    .split('/')
+    .map((segment) => slugifyActionSegment(segment))
+    .filter((segment) => segment.length > 0);
+
+  return [actionPrefix, method.toLowerCase(), ...pathSegments].join('.');
+}
+
+function normalizeTargetHeaders(headers?: Record<string, string>): Record<string, string> {
+  if (!headers) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(headers).filter(
+      (entry): entry is [string, string] =>
+        typeof entry[0] === 'string' && typeof entry[1] === 'string',
+    ),
+  );
+}
+
 function getDefaultInjection(type: CredentialType): InjectionConfig {
   switch (type) {
     case 'API_KEY':
@@ -106,6 +154,8 @@ function getDefaultInjection(type: CredentialType): InjectionConfig {
         'CUSTOM credential type requires an explicit injection configuration',
       );
   }
+
+  throw new ValidationError('Unsupported credential type');
 }
 
 function injectCredential(
@@ -350,4 +400,56 @@ export async function executeProxy(input: ProxyExecuteInput): Promise<ProxyResul
     evaluation.policyId,
     start,
   );
+}
+
+export async function executeTransparentProxy(input: ProxyFetchInput): Promise<ProxyResult> {
+  const method = (input.method ?? 'GET').toUpperCase();
+  validateTargetUrl(input.url);
+  const target = {
+    url: input.url,
+    method,
+    headers: normalizeTargetHeaders(input.headers),
+    body: input.body,
+  };
+
+  let credentialId = input.credentialId;
+  let injection = input.injection;
+  let actionPrefix: string | undefined;
+
+  if (credentialId) {
+    const credential = await prisma.credential.findUnique({ where: { id: credentialId } });
+    if (!credential) {
+      throw new ForbiddenError('Credential not found');
+    }
+    if (credential.agentId !== input.agentId) {
+      throw new ForbiddenError('Credential does not belong to this agent');
+    }
+
+    const routing = getCredentialRoutingMetadata(credential);
+    actionPrefix = routing.actionPrefix;
+    injection = injection ?? routing.injection;
+  } else {
+    const resolved = await resolveCredentialForTarget(input.agentId, input.url);
+    credentialId = resolved.credential.id;
+    actionPrefix = resolved.actionPrefix;
+    injection = injection ?? resolved.injection;
+  }
+
+  const action =
+    input.action ??
+    inferActionFromTarget(
+      input.url,
+      method,
+      actionPrefix ?? (slugifyActionSegment(new URL(input.url).hostname.replace(/\./g, '-')) || 'http'),
+    );
+
+  return executeProxy({
+    agentId: input.agentId,
+    credentialId: credentialId!,
+    action,
+    params: input.params,
+    target,
+    injection,
+    timeout: input.timeout,
+  });
 }

@@ -34,14 +34,16 @@ export async function callExternalApi(
     };
 
     if (request.body !== undefined) {
-      fetchInit.body = JSON.stringify(request.body);
-      // Set Content-Type if not already provided
       const headers = fetchInit.headers as Record<string, string>;
-      const hasContentType = Object.keys(request.headers).some(
-        (k) => k.toLowerCase() === 'content-type',
-      );
-      if (!hasContentType) {
-        headers['Content-Type'] = 'application/json';
+      const hasContentType = Object.keys(request.headers).some((k) => k.toLowerCase() === 'content-type');
+
+      if (typeof request.body === 'string') {
+        fetchInit.body = request.body;
+      } else {
+        fetchInit.body = JSON.stringify(request.body);
+        if (!hasContentType) {
+          headers['Content-Type'] = 'application/json';
+        }
       }
     }
 

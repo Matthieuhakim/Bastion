@@ -12,6 +12,7 @@ import type {
   UpdatePolicyInput,
   PolicyEvaluateInput,
   PolicyEvaluateResult,
+  ProxyFetchInput,
   ProxyExecuteInput,
   ProxyExecuteResult,
   PendingRequest,
@@ -26,6 +27,8 @@ export interface BastionClientConfig {
   baseUrl: string;
   /** Admin API key (PROJECT_API_KEY) or agent secret (bst_...) */
   apiKey: string;
+  /** Optional fetch implementation, useful when wrapping global fetch. */
+  fetch?: typeof globalThis.fetch;
 }
 
 interface RequestOptions {
@@ -36,10 +39,12 @@ interface RequestOptions {
 export class BastionClient {
   private readonly baseUrl: string;
   private readonly apiKey: string;
+  private readonly fetchImpl?: typeof globalThis.fetch;
 
   constructor(config: BastionClientConfig) {
     this.baseUrl = config.baseUrl.replace(/\/+$/, '');
     this.apiKey = config.apiKey;
+    this.fetchImpl = config.fetch;
   }
 
   private buildQuery(params: Record<string, string | number | undefined>): string {
@@ -63,7 +68,8 @@ export class BastionClient {
       headers['Content-Type'] = 'application/json';
     }
 
-    const res = await fetch(url, {
+    const fetchImpl = this.fetchImpl ?? globalThis.fetch.bind(globalThis);
+    const res = await fetchImpl(url, {
       method,
       headers,
       body: options?.body !== undefined ? JSON.stringify(options.body) : undefined,
@@ -180,6 +186,15 @@ export class BastionClient {
    */
   async execute(input: ProxyExecuteInput): Promise<ProxyExecuteResult> {
     return this.request<ProxyExecuteResult>('POST', '/v1/proxy/execute', { body: input });
+  }
+
+  /**
+   * Execute a fetch-compatible proxied request. Bastion resolves the stored
+   * provider credential from the destination metadata, injects it server-side,
+   * and returns the upstream response.
+   */
+  async proxyRequest(input: ProxyFetchInput): Promise<ProxyExecuteResult> {
+    return this.request<ProxyExecuteResult>('POST', '/v1/proxy/fetch', { body: input });
   }
 
   // ── HITL (admin) ────────────────────────────────────────────────────────

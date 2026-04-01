@@ -176,6 +176,18 @@ export interface ProxyExecuteResult {
   meta: ProxyMeta;
 }
 
+export interface ProxyFetchInput {
+  url: string;
+  method?: string;
+  headers?: Record<string, string>;
+  body?: unknown;
+  params?: { amount?: number; ip?: string };
+  action?: string;
+  credentialId?: string;
+  injection?: InjectionConfig;
+  timeout?: number;
+}
+
 // ── HITL ───────────────────────────────────────────────────────────────────
 
 export interface PendingRequest {

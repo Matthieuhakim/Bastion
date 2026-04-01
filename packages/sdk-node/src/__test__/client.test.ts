@@ -213,6 +213,36 @@ describe('proxy', () => {
     expect(body.injection).toEqual({ location: 'header', key: 'X-Api-Key' });
     expect(body.timeout).toBe(5000);
   });
+
+  it('proxyRequest sends POST to /proxy/fetch', async () => {
+    const proxyResult = {
+      upstream: { status: 200, headers: { 'content-type': 'application/json' }, body: { ok: true } },
+      meta: {
+        credentialId: 'c1',
+        action: 'openai.post.v1.chat.completions',
+        policyDecision: 'ALLOW',
+        policyId: 'p1',
+        durationMs: 42,
+      },
+    };
+    global.fetch = mockFetch(200, proxyResult);
+
+    const result = await client.proxyRequest({
+      url: 'https://api.openai.com/v1/chat/completions',
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: { model: 'gpt-5.4-mini' },
+    });
+
+    expect(result).toEqual(proxyResult);
+    const [url, opts] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(url).toBe(`${BASE_URL}/v1/proxy/fetch`);
+    expect(opts.method).toBe('POST');
+    expect(JSON.parse(opts.body)).toMatchObject({
+      url: 'https://api.openai.com/v1/chat/completions',
+      method: 'POST',
+    });
+  });
 });
 
 describe('hitl', () => {
