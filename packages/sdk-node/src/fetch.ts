@@ -6,6 +6,11 @@ export interface BastionFetchConfig extends BastionClientConfig {
   headers?: HeadersInit;
 }
 
+export type BastionFetch = (
+  input: RequestInfo | URL,
+  init?: RequestInit,
+) => Promise<Response>;
+
 function headersToObject(headers?: HeadersInit): Record<string, string> {
   const normalized = new Headers(headers ?? {});
   const result: Record<string, string> = {};
@@ -84,7 +89,7 @@ export function createBastionFetch(config: BastionFetchConfig): typeof fetch {
   });
   const defaultHeaders = headersToObject(config.headers);
 
-  return async function bastionFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const bastionFetch: BastionFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     let request: Request;
 
     if (input instanceof Request) {
@@ -124,6 +129,8 @@ export function createBastionFetch(config: BastionFetchConfig): typeof fetch {
       headers: responseHeaders,
     });
   };
+
+  return Object.assign(bastionFetch, transport);
 }
 
 export function installBastionFetchGlobal(config: BastionFetchConfig): typeof fetch {
