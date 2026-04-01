@@ -18,6 +18,7 @@ class BastionClient:
         self._client = httpx.Client(
             base_url=self.base_url,
             headers={"Authorization": f"Bearer {self.api_key}"},
+            timeout=httpx.Timeout(connect=10.0, read=360.0, write=10.0, pool=10.0),
         )
 
     def _request(
