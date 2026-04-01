@@ -9,7 +9,7 @@ const app = createApp();
 const shutdownTimeoutMs = 10_000;
 let isShuttingDown = false;
 
-const server = app.listen(config.port, () => {
+const server = app.listen(config.port, '0.0.0.0', () => {
   const address = server.address() as AddressInfo | null;
   const port = address?.port ?? config.port;
   logger.info('Bastion API started', { port, nodeEnv: config.nodeEnv });
