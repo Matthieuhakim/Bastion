@@ -35,7 +35,9 @@ export async function callExternalApi(
 
     if (request.body !== undefined) {
       const headers = fetchInit.headers as Record<string, string>;
-      const hasContentType = Object.keys(request.headers).some((k) => k.toLowerCase() === 'content-type');
+      const hasContentType = Object.keys(request.headers).some(
+        (k) => k.toLowerCase() === 'content-type',
+      );
 
       if (typeof request.body === 'string') {
         fetchInit.body = request.body;

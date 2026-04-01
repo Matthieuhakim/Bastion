@@ -155,7 +155,9 @@ function parseInjection(injection: unknown): InjectionConfig | undefined {
   if (typeof injection !== 'object' || injection === null || Array.isArray(injection)) {
     throw new ValidationError('injection must be an object');
   }
-  if (!['header', 'query', 'body'].includes((injection as Record<string, unknown>).location as string)) {
+  if (
+    !['header', 'query', 'body'].includes((injection as Record<string, unknown>).location as string)
+  ) {
     throw new ValidationError('injection.location must be one of: header, query, body');
   }
   if (
@@ -200,7 +202,10 @@ function validateFetchInput(req: Request): ProxyFetchInput {
     throw new ValidationError('action must be a non-empty string');
   }
 
-  if (credentialId !== undefined && (typeof credentialId !== 'string' || credentialId.length === 0)) {
+  if (
+    credentialId !== undefined &&
+    (typeof credentialId !== 'string' || credentialId.length === 0)
+  ) {
     throw new ValidationError('credentialId must be a non-empty string');
   }
 

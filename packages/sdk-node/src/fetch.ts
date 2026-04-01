@@ -6,10 +6,7 @@ export interface BastionFetchConfig extends BastionClientConfig {
   headers?: HeadersInit;
 }
 
-export type BastionFetch = (
-  input: RequestInfo | URL,
-  init?: RequestInit,
-) => Promise<Response>;
+export type BastionFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
 function headersToObject(headers?: HeadersInit): Record<string, string> {
   const normalized = new Headers(headers ?? {});
@@ -120,7 +117,11 @@ export function createBastionFetch(config: BastionFetchConfig): typeof fetch {
     }
 
     const responseBody = buildResponseBody(result.upstream.body);
-    if (responseBody && typeof result.upstream.body !== 'string' && !responseHeaders.has('content-type')) {
+    if (
+      responseBody &&
+      typeof result.upstream.body !== 'string' &&
+      !responseHeaders.has('content-type')
+    ) {
       responseHeaders.set('content-type', 'application/json');
     }
 

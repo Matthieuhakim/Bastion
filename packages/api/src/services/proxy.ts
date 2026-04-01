@@ -440,7 +440,8 @@ export async function executeTransparentProxy(input: ProxyFetchInput): Promise<P
     inferActionFromTarget(
       input.url,
       method,
-      actionPrefix ?? (slugifyActionSegment(new URL(input.url).hostname.replace(/\./g, '-')) || 'http'),
+      actionPrefix ??
+        (slugifyActionSegment(new URL(input.url).hostname.replace(/\./g, '-')) || 'http'),
     );
 
   return executeProxy({

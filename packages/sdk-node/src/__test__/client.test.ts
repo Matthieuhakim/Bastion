@@ -216,7 +216,11 @@ describe('proxy', () => {
 
   it('proxyRequest sends POST to /proxy/fetch', async () => {
     const proxyResult = {
-      upstream: { status: 200, headers: { 'content-type': 'application/json' }, body: { ok: true } },
+      upstream: {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+        body: { ok: true },
+      },
       meta: {
         credentialId: 'c1',
         action: 'openai.post.v1.chat.completions',
