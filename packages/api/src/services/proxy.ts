@@ -144,6 +144,80 @@ function normalizeTargetHeaders(headers?: Record<string, string>): Record<string
   );
 }
 
+function getHeaderValue(headers: Record<string, string>, key: string): string | undefined {
+  const entry = Object.entries(headers).find(
+    ([header]) => header.toLowerCase() === key.toLowerCase(),
+  );
+  return entry?.[1];
+}
+
+function parseBodyValue(target: ProxyTarget, key: string): string | number | undefined {
+  if (typeof target.body === 'object' && target.body !== null && !Array.isArray(target.body)) {
+    const value = (target.body as Record<string, unknown>)[key];
+    if (typeof value === 'string' || typeof value === 'number') {
+      return value;
+    }
+    return undefined;
+  }
+
+  if (typeof target.body === 'string') {
+    const contentType = getHeaderValue(target.headers, 'content-type') ?? '';
+    if (contentType.includes('application/x-www-form-urlencoded')) {
+      return new URLSearchParams(target.body).get(key) ?? undefined;
+    }
+
+    if (contentType.includes('application/json')) {
+      try {
+        const parsed = JSON.parse(target.body) as Record<string, unknown>;
+        const value = parsed[key];
+        if (typeof value === 'string' || typeof value === 'number') {
+          return value;
+        }
+      } catch {
+        return undefined;
+      }
+    }
+  }
+
+  return undefined;
+}
+
+function inferAmountParam(provider: string | undefined, target: ProxyTarget): number | undefined {
+  const amountValue = parseBodyValue(target, 'amount');
+  if (amountValue === undefined) {
+    return undefined;
+  }
+
+  const numericAmount =
+    typeof amountValue === 'number' ? amountValue : Number.parseFloat(amountValue);
+  if (!Number.isFinite(numericAmount)) {
+    return undefined;
+  }
+
+  if (provider?.toLowerCase() === 'stripe') {
+    return numericAmount / 100;
+  }
+
+  return numericAmount;
+}
+
+function inferEvaluationParams(
+  provider: string | undefined,
+  target: ProxyTarget,
+  params?: EvaluationParams,
+): EvaluationParams | undefined {
+  const nextParams: EvaluationParams = { ...(params ?? {}) };
+
+  if (nextParams.amount === undefined) {
+    const inferredAmount = inferAmountParam(provider, target);
+    if (inferredAmount !== undefined) {
+      nextParams.amount = inferredAmount;
+    }
+  }
+
+  return Object.keys(nextParams).length > 0 ? nextParams : undefined;
+}
+
 function getDefaultInjection(type: CredentialType): InjectionConfig {
   switch (type) {
     case 'API_KEY':
@@ -415,6 +489,7 @@ export async function executeTransparentProxy(input: ProxyFetchInput): Promise<P
   let credentialId = input.credentialId;
   let injection = input.injection;
   let actionPrefix: string | undefined;
+  let provider: string | undefined;
 
   if (credentialId) {
     const credential = await prisma.credential.findUnique({ where: { id: credentialId } });
@@ -427,11 +502,13 @@ export async function executeTransparentProxy(input: ProxyFetchInput): Promise<P
 
     const routing = getCredentialRoutingMetadata(credential);
     actionPrefix = routing.actionPrefix;
+    provider = routing.provider;
     injection = injection ?? routing.injection;
   } else {
     const resolved = await resolveCredentialForTarget(input.agentId, input.url);
     credentialId = resolved.credential.id;
     actionPrefix = resolved.actionPrefix;
+    provider = resolved.provider;
     injection = injection ?? resolved.injection;
   }
 
@@ -448,7 +525,7 @@ export async function executeTransparentProxy(input: ProxyFetchInput): Promise<P
     agentId: input.agentId,
     credentialId: credentialId!,
     action,
-    params: input.params,
+    params: inferEvaluationParams(provider, target, input.params),
     target,
     injection,
     timeout: input.timeout,

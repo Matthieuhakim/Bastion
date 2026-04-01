@@ -461,4 +461,51 @@ describe('POST /v1/proxy/fetch', () => {
     expect(res.body.error.message).toContain('No credential routing found');
     expect(mockFetch).not.toHaveBeenCalled();
   });
+
+  it('infers Stripe amount from transparent requests for HITL policies', async () => {
+    const agent = await createTestAgent();
+    const credential = await createTestCredential(agent.id, {
+      metadata: {
+        provider: 'stripe',
+        actionPrefix: 'stripe',
+        targetHosts: ['api.stripe.com'],
+      },
+      value: 'sk_test_stripe_secret',
+    });
+    await createTestPolicy(agent.id, credential.id, {
+      allowedActions: ['stripe.*'],
+      requiresApprovalAbove: 20,
+    });
+
+    const hitlModule = await import('../services/hitl.js');
+    vi.spyOn(hitlModule, 'createPendingRequest').mockResolvedValue({
+      requestId: 'stripe-hitl-req',
+      status: 'pending',
+      agentId: agent.id,
+      credentialId: credential.id,
+      action: 'stripe.post.v1.payment_intents',
+      params: { amount: 25 },
+      target: {
+        url: 'https://api.stripe.com/v1/payment_intents',
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: 'amount=2500&currency=usd',
+      },
+      policyId: null,
+      reason: 'Amount exceeds threshold',
+      createdAt: new Date().toISOString(),
+    });
+    vi.spyOn(hitlModule, 'waitForResolution').mockResolvedValue('timeout');
+
+    const res = await agentAuthed('post', '/v1/proxy/fetch', agent.agentSecret).send({
+      url: 'https://api.stripe.com/v1/payment_intents',
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: 'amount=2500&currency=usd',
+    });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error.message).toContain('timed out waiting for human approval');
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
 });
