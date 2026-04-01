@@ -36,6 +36,32 @@ interface RequestOptions {
   query?: Record<string, string | number | undefined>;
 }
 
+function getErrorMessage(body: unknown, statusText: string): string {
+  if (typeof body !== 'object' || body === null) {
+    return statusText;
+  }
+
+  const record = body as {
+    message?: unknown;
+    error?: { message?: unknown } | unknown;
+  };
+
+  if (typeof record.message === 'string' && record.message.length > 0) {
+    return record.message;
+  }
+
+  if (
+    typeof record.error === 'object' &&
+    record.error !== null &&
+    typeof (record.error as { message?: unknown }).message === 'string' &&
+    ((record.error as { message?: string }).message?.length ?? 0) > 0
+  ) {
+    return (record.error as { message: string }).message;
+  }
+
+  return statusText;
+}
+
 export class BastionClient {
   private readonly baseUrl: string;
   private readonly apiKey: string;
@@ -75,10 +101,10 @@ export class BastionClient {
       body: options?.body !== undefined ? JSON.stringify(options.body) : undefined,
     });
 
-    const body = (await res.json()) as T & { message?: string };
+    const body = (await res.json()) as T;
 
     if (!res.ok) {
-      throwForStatus(res.status, { message: body?.message ?? res.statusText });
+      throwForStatus(res.status, { message: getErrorMessage(body, res.statusText) });
     }
 
     return body;

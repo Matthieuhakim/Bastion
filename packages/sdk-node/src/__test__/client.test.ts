@@ -370,6 +370,13 @@ describe('error handling', () => {
       expect((e as BastionError).statusCode).toBe(500);
     }
   });
+
+  it('extracts nested API error messages', async () => {
+    global.fetch = mockFetch(404, {
+      error: { message: 'No credential routing found for demo.example' },
+    });
+    await expect(client.health()).rejects.toThrow('No credential routing found for demo.example');
+  });
 });
 
 describe('base url trailing slash', () => {
