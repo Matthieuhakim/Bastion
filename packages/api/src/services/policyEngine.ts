@@ -11,10 +11,15 @@ import type { PolicyConstraints } from './policies.js';
 
 export type PolicyDecision = 'ALLOW' | 'DENY' | 'ESCALATE';
 
+export type IntentReviewConstraint = NonNullable<PolicyConstraints['intentReview']> & {
+  policyId: string | null;
+};
+
 export interface EvaluationResult {
   decision: PolicyDecision;
   policyId: string | null;
   reason: string;
+  intentReview?: IntentReviewConstraint;
 }
 
 export interface EvaluationParams {
@@ -180,8 +185,18 @@ export async function evaluateRequest(
     policyId: activePolicies[0].id,
     reason: 'Request allowed by policy',
   };
+  let intentReview: IntentReviewConstraint | undefined;
 
   for (const policy of activePolicies) {
+    const constraints = (policy.constraints as PolicyConstraints) ?? {};
+    if (constraints.intentReview?.enabled && !intentReview) {
+      intentReview = {
+        ...constraints.intentReview,
+        mode: constraints.intentReview.mode ?? 'escalate_on_risk',
+        policyId: policy.id,
+      };
+    }
+
     const result = await evaluatePolicy(policy, action, params, dryRun);
 
     if (result.decision === 'DENY') {
@@ -190,6 +205,10 @@ export async function evaluateRequest(
     if (result.decision === 'ESCALATE' && finalResult.decision !== 'DENY') {
       finalResult = result;
     }
+  }
+
+  if (intentReview) {
+    finalResult.intentReview = intentReview;
   }
 
   return finalResult;

@@ -3,6 +3,7 @@ import { redis, createSubscriberConnection } from './redis.js';
 import { NotFoundError, ConflictError } from '../errors.js';
 import type { EvaluationParams } from './policyEngine.js';
 import type { ProxyTarget, InjectionConfig } from './proxy.js';
+import type { IntentJudgeVerdict } from './intentJudge.js';
 
 export interface PendingRequest {
   requestId: string;
@@ -16,6 +17,7 @@ export interface PendingRequest {
   timeout?: number;
   policyId: string | null;
   reason: string;
+  intentReview?: IntentJudgeVerdict;
   createdAt: string;
   resolvedBy?: string;
   denialReason?: string;
@@ -24,6 +26,7 @@ export interface PendingRequest {
 export interface EscalationInfo {
   policyId: string | null;
   reason: string;
+  intentReview?: IntentJudgeVerdict;
 }
 
 const DEFAULT_TTL_SECONDS = 300; // 5 minutes
@@ -63,6 +66,7 @@ export async function createPendingRequest(
     timeout: input.timeout,
     policyId: escalation.policyId,
     reason: escalation.reason,
+    intentReview: escalation.intentReview,
     createdAt: new Date().toISOString(),
   };
 

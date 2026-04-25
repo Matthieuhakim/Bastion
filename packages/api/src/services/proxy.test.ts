@@ -44,12 +44,18 @@ vi.mock('./auditChain.js', () => ({
   appendAuditRecord: vi.fn(),
 }));
 
+vi.mock('./intentJudge.js', () => ({
+  isIntentReviewActive: vi.fn().mockReturnValue(false),
+  judgeIntent: vi.fn(),
+}));
+
 import { prisma } from './db.js';
 import { decryptCredential } from './credentials.js';
 import { evaluateRequest, commitRateLimitAndSpend } from './policyEngine.js';
 import { callExternalApi } from './httpClient.js';
 import { createPendingRequest, waitForResolution } from './hitl.js';
 import { appendAuditRecord } from './auditChain.js';
+import { isIntentReviewActive, judgeIntent } from './intentJudge.js';
 
 const mockFindCredential = prisma.credential.findUnique as ReturnType<typeof vi.fn>;
 const mockFindAgent = prisma.agent.findUnique as ReturnType<typeof vi.fn>;
@@ -60,6 +66,8 @@ const mockCallApi = callExternalApi as ReturnType<typeof vi.fn>;
 const mockCreatePending = createPendingRequest as ReturnType<typeof vi.fn>;
 const mockWaitForResolution = waitForResolution as ReturnType<typeof vi.fn>;
 const mockAppendAuditRecord = appendAuditRecord as ReturnType<typeof vi.fn>;
+const mockIsIntentReviewActive = isIntentReviewActive as ReturnType<typeof vi.fn>;
+const mockJudgeIntent = judgeIntent as ReturnType<typeof vi.fn>;
 
 function makeInput(overrides: Partial<ProxyExecuteInput> = {}): ProxyExecuteInput {
   return {
@@ -102,6 +110,16 @@ beforeEach(() => {
   });
   mockCommit.mockResolvedValue(undefined);
   mockAppendAuditRecord.mockResolvedValue(undefined);
+  mockIsIntentReviewActive.mockReturnValue(false);
+  mockJudgeIntent.mockResolvedValue({
+    decision: 'SAFE',
+    riskLevel: 'low',
+    confidence: 0.98,
+    reasons: ['Intent matches expected action'],
+    provider: 'openai',
+    model: 'gpt-4o-mini',
+    promptVersion: 'intent-judge-v1',
+  });
 });
 
 describe('executeProxy', () => {
@@ -166,6 +184,7 @@ describe('executeProxy', () => {
       // Upstream should not be called
       expect(mockCallApi).not.toHaveBeenCalled();
       expect(mockCommit).not.toHaveBeenCalled();
+      expect(mockJudgeIntent).not.toHaveBeenCalled();
       expect(mockAppendAuditRecord).toHaveBeenCalledWith(
         expect.objectContaining({
           agentId: 'agent-1',
@@ -184,6 +203,98 @@ describe('executeProxy', () => {
         amount: 500,
         ip: '10.0.0.1',
       });
+    });
+  });
+
+  describe('intent review', () => {
+    beforeEach(() => {
+      mockEvaluate.mockResolvedValue({
+        decision: 'ALLOW',
+        policyId: 'policy-1',
+        reason: 'Allowed',
+        intentReview: {
+          enabled: true,
+          mode: 'escalate_on_risk',
+          policyId: 'policy-1',
+          instructions: 'Only allow ordinary reads.',
+        },
+      });
+    });
+
+    it('does not call the judge when global intent review is disabled', async () => {
+      mockIsIntentReviewActive.mockReturnValue(false);
+
+      await executeProxy(makeInput());
+
+      expect(mockJudgeIntent).not.toHaveBeenCalled();
+      expect(mockCallApi).toHaveBeenCalledOnce();
+    });
+
+    it('lets safe intent proceed before credential injection', async () => {
+      mockIsIntentReviewActive.mockReturnValue(true);
+
+      await executeProxy(makeInput());
+
+      expect(mockJudgeIntent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentId: 'agent-1',
+          credentialId: 'cred-1',
+          action: 'test.get',
+          policyDecision: 'ALLOW',
+          review: expect.objectContaining({ enabled: true }),
+        }),
+      );
+      expect(mockJudgeIntent).toHaveBeenCalledBefore(mockDecrypt);
+      expect(mockCreatePending).not.toHaveBeenCalled();
+      expect(mockCallApi).toHaveBeenCalledOnce();
+    });
+
+    it('escalates risky intent to HITL before upstream execution', async () => {
+      const verdict = {
+        decision: 'NEEDS_APPROVAL',
+        riskLevel: 'high',
+        confidence: 0.91,
+        reasons: ['Request appears destructive'],
+        provider: 'openai',
+        model: 'gpt-4o-mini',
+        promptVersion: 'intent-judge-v1',
+      };
+      mockIsIntentReviewActive.mockReturnValue(true);
+      mockJudgeIntent.mockResolvedValue(verdict);
+      mockCreatePending.mockResolvedValue({
+        requestId: 'hitl-intent-1',
+        status: 'pending',
+        agentId: 'agent-1',
+        credentialId: 'cred-1',
+        action: 'test.get',
+        params: {},
+        target: { url: 'https://api.example.com/data', method: 'GET', headers: {} },
+        policyId: 'policy-1',
+        reason: 'Intent judge requires human approval',
+        intentReview: verdict,
+        createdAt: new Date().toISOString(),
+      });
+      mockWaitForResolution.mockResolvedValue('approved');
+
+      const result = await executeProxy(makeInput());
+
+      expect(result.meta.hitlRequestId).toBe('hitl-intent-1');
+      expect(mockCreatePending).toHaveBeenCalledWith(
+        expect.objectContaining({ agentId: 'agent-1', credentialId: 'cred-1' }),
+        expect.objectContaining({
+          policyId: 'policy-1',
+          intentReview: verdict,
+          reason: expect.stringContaining('Intent judge requires human approval'),
+        }),
+      );
+      expect(mockDecrypt).toHaveBeenCalledAfter(mockWaitForResolution);
+      expect(mockAppendAuditRecord).toHaveBeenCalledWith(
+        expect.objectContaining({
+          hitlRequestId: 'hitl-intent-1',
+          intentReview: verdict,
+          outcome: 'executed',
+        }),
+      );
     });
   });
 

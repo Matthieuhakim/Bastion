@@ -101,6 +101,28 @@ function validateConstraints(constraints: unknown): PolicyConstraints {
     result.ipAllowlist = c.ipAllowlist as string[];
   }
 
+  if (c.intentReview !== undefined) {
+    const ir = c.intentReview as Record<string, unknown>;
+    if (typeof ir !== 'object' || ir === null || Array.isArray(ir)) {
+      throw new ValidationError('constraints.intentReview must be an object');
+    }
+    if (typeof ir.enabled !== 'boolean') {
+      throw new ValidationError('constraints.intentReview.enabled must be a boolean');
+    }
+    if (ir.mode !== undefined && ir.mode !== 'escalate_on_risk') {
+      throw new ValidationError('constraints.intentReview.mode must be escalate_on_risk');
+    }
+    if (ir.instructions !== undefined && typeof ir.instructions !== 'string') {
+      throw new ValidationError('constraints.intentReview.instructions must be a string');
+    }
+
+    result.intentReview = {
+      enabled: ir.enabled,
+      mode: 'escalate_on_risk',
+      ...(ir.instructions ? { instructions: ir.instructions } : {}),
+    };
+  }
+
   return result;
 }
 

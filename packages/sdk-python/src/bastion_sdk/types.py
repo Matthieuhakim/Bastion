@@ -48,12 +48,19 @@ class RateLimit(TypedDict):
     windowSeconds: int
 
 
+class IntentReviewConstraint(TypedDict, total=False):
+    enabled: bool
+    mode: str
+    instructions: str
+
+
 class PolicyConstraints(TypedDict, total=False):
     maxAmountPerTransaction: float
     maxDailySpend: float
     timeWindow: TimeWindow
     rateLimit: RateLimit
     ipAllowlist: list[str]
+    intentReview: IntentReviewConstraint
 
 
 class CreatePolicyInput(TypedDict):

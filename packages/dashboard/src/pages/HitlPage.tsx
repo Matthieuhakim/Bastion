@@ -62,7 +62,17 @@ export function HitlPage() {
     },
     {
       header: 'Reason',
-      accessor: (r) => <span className="text-xs text-gray-600">{r.reason}</span>,
+      accessor: (r) => (
+        <div className="max-w-md space-y-1 text-xs text-gray-600">
+          <div>{r.reason}</div>
+          {r.intentReview && (
+            <div className="rounded bg-amber-50 px-2 py-1 text-amber-800">
+              Intent risk: {r.intentReview.riskLevel} ({Math.round(r.intentReview.confidence * 100)}
+              % confidence). {r.intentReview.reasons.join(' ')}
+            </div>
+          )}
+        </div>
+      ),
     },
     { header: 'Pending', accessor: (r) => timeAgo(r.createdAt) },
     {

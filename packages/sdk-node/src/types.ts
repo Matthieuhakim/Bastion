@@ -77,12 +77,19 @@ export interface RateLimit {
   windowSeconds: number;
 }
 
+export interface IntentReviewConstraint {
+  enabled: boolean;
+  mode?: 'escalate_on_risk';
+  instructions?: string;
+}
+
 export interface PolicyConstraints {
   maxAmountPerTransaction?: number;
   maxDailySpend?: number;
   timeWindow?: TimeWindow;
   rateLimit?: RateLimit;
   ipAllowlist?: string[];
+  intentReview?: IntentReviewConstraint;
 }
 
 export interface Policy {
@@ -190,15 +197,32 @@ export interface ProxyFetchInput {
 
 // ── HITL ───────────────────────────────────────────────────────────────────
 
+export interface IntentJudgeVerdict {
+  decision: 'SAFE' | 'NEEDS_APPROVAL';
+  riskLevel: 'low' | 'medium' | 'high';
+  confidence: number;
+  reasons: string[];
+  provider: string;
+  model: string;
+  promptVersion: string;
+}
+
 export interface PendingRequest {
   requestId: string;
+  status: 'pending' | 'approved' | 'denied';
   agentId: string;
   credentialId: string;
   action: string;
-  status: string;
-  context: Record<string, unknown>;
+  params: { amount?: number; ip?: string };
+  target: ProxyTarget;
+  injection?: InjectionConfig;
+  timeout?: number;
+  policyId: string | null;
+  reason: string;
+  intentReview?: IntentJudgeVerdict;
   createdAt: string;
-  expiresAt: string;
+  resolvedBy?: string;
+  denialReason?: string;
 }
 
 export interface HitlResolution {
@@ -223,6 +247,7 @@ export interface AuditRecordDocument {
   previousHash: string;
   timestamp: string;
   hitlRequestId?: string;
+  intentReview?: IntentJudgeVerdict;
   upstreamStatus?: number;
   outcome?: string;
   error?: string;

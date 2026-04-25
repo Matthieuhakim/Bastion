@@ -13,6 +13,8 @@ import { ForbiddenError, ValidationError } from '../errors.js';
 import { createPendingRequest, waitForResolution } from './hitl.js';
 import { sendWebhookNotification, buildWebhookPayload } from './notifications.js';
 import { appendAuditRecord } from './auditChain.js';
+import { isIntentReviewActive, judgeIntent } from './intentJudge.js';
+import type { IntentJudgeVerdict } from './intentJudge.js';
 import { logger } from './logger.js';
 
 export interface ProxyTarget {
@@ -77,6 +79,18 @@ function getErrorMessage(error: unknown): string {
   return String(error);
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+  return value as Record<string, unknown>;
+}
+
+function buildIntentEscalationReason(verdict: IntentJudgeVerdict): string {
+  const reason = verdict.reasons[0] ?? 'Intent judge requires human approval';
+  return `Intent judge requires human approval (${verdict.riskLevel} risk): ${reason}`;
+}
+
 async function appendAuditRecordSafely(
   input: Parameters<typeof appendAuditRecord>[0],
 ): Promise<void> {
@@ -85,6 +99,92 @@ async function appendAuditRecordSafely(
   } catch (error) {
     logger.error('Failed to append audit record', error instanceof Error ? error : { error });
   }
+}
+
+async function waitForHumanApproval(input: {
+  agentId: string;
+  credentialId: string;
+  action: string;
+  params: EvaluationParams;
+  target: ProxyTarget;
+  injection?: InjectionConfig;
+  timeout?: number;
+  policyId: string | null;
+  reason: string;
+  start: number;
+  intentReview?: IntentJudgeVerdict;
+}): Promise<string> {
+  const pending = await createPendingRequest(
+    {
+      agentId: input.agentId,
+      credentialId: input.credentialId,
+      action: input.action,
+      params: input.params,
+      target: input.target,
+      injection: input.injection,
+      timeout: input.timeout,
+    },
+    {
+      policyId: input.policyId,
+      reason: input.reason,
+      intentReview: input.intentReview,
+    },
+  );
+
+  // Fire webhook notification (non-blocking)
+  const agent = await prisma.agent.findUnique({ where: { id: input.agentId } });
+  if (agent?.callbackUrl) {
+    const payload = buildWebhookPayload(
+      pending.requestId,
+      input.agentId,
+      input.action,
+      input.params,
+      input.reason,
+    );
+    sendWebhookNotification(agent.callbackUrl, payload).catch(() => {});
+  }
+
+  // Block until admin approves/denies or timeout
+  const resolution = await waitForResolution(pending.requestId, HITL_TIMEOUT_MS);
+
+  if (resolution === 'denied') {
+    await appendAuditRecordSafely({
+      agentId: input.agentId,
+      action: input.action,
+      targetUrl: input.target.url,
+      targetMethod: input.target.method,
+      credentialId: input.credentialId,
+      policyDecision: 'ESCALATE',
+      policyId: input.policyId,
+      reason: 'Request denied by human reviewer',
+      params: input.params,
+      durationMs: Date.now() - input.start,
+      hitlRequestId: pending.requestId,
+      intentReview: input.intentReview,
+      outcome: 'denied',
+    });
+    throw new ForbiddenError('Request denied by human reviewer');
+  }
+  if (resolution === 'timeout') {
+    await appendAuditRecordSafely({
+      agentId: input.agentId,
+      action: input.action,
+      targetUrl: input.target.url,
+      targetMethod: input.target.method,
+      credentialId: input.credentialId,
+      policyDecision: 'ESCALATE',
+      policyId: input.policyId,
+      reason: 'Request timed out waiting for human approval',
+      params: input.params,
+      durationMs: Date.now() - input.start,
+      hitlRequestId: pending.requestId,
+      intentReview: input.intentReview,
+      outcome: 'denied',
+    });
+    throw new ForbiddenError('Request timed out waiting for human approval');
+  }
+
+  return pending.requestId;
 }
 
 function validateTargetUrl(url: string): URL {
@@ -285,6 +385,7 @@ async function executeUpstreamCall(
   policyId: string | null,
   start: number,
   hitlRequestId?: string,
+  intentReview?: IntentJudgeVerdict,
 ): Promise<ProxyResult> {
   try {
     // Decrypt credential
@@ -312,6 +413,7 @@ async function executeUpstreamCall(
       params,
       durationMs,
       hitlRequestId,
+      intentReview,
       upstreamStatus: upstream.status,
       outcome: 'executed',
     });
@@ -341,6 +443,7 @@ async function executeUpstreamCall(
       params,
       durationMs: Date.now() - start,
       hitlRequestId,
+      intentReview,
       outcome: 'failed',
       error: getErrorMessage(error),
     });
@@ -387,63 +490,70 @@ export async function executeProxy(input: ProxyExecuteInput): Promise<ProxyResul
     throw new ForbiddenError(evaluation.reason);
   }
 
+  let intentReview: IntentJudgeVerdict | undefined;
+  if (evaluation.decision === 'ALLOW' && isIntentReviewActive(evaluation.intentReview)) {
+    intentReview = await judgeIntent({
+      agentId,
+      credentialId,
+      credentialName: credential.name,
+      credentialType: credential.type,
+      credentialMetadata: asRecord(credential.metadata),
+      credentialScopes: credential.scopes,
+      action,
+      params,
+      target,
+      policyDecision: evaluation.decision,
+      policyId: evaluation.policyId,
+      policyReason: evaluation.reason,
+      review: evaluation.intentReview!,
+    });
+
+    if (intentReview.decision === 'NEEDS_APPROVAL') {
+      const hitlRequestId = await waitForHumanApproval({
+        agentId,
+        credentialId,
+        action,
+        params,
+        target,
+        injection,
+        timeout,
+        policyId: evaluation.policyId,
+        reason: buildIntentEscalationReason(intentReview),
+        start,
+        intentReview,
+      });
+
+      return executeUpstreamCall(
+        credential,
+        target,
+        injection,
+        timeout,
+        agentId,
+        credentialId,
+        action,
+        params,
+        evaluation.policyId,
+        start,
+        hitlRequestId,
+        intentReview,
+      );
+    }
+  }
+
   // 4. Handle ESCALATE via HITL gate
   if (evaluation.decision === 'ESCALATE') {
-    const pending = await createPendingRequest(
-      { agentId, credentialId, action, params, target, injection, timeout },
-      { policyId: evaluation.policyId, reason: evaluation.reason },
-    );
-
-    // Fire webhook notification (non-blocking)
-    const agent = await prisma.agent.findUnique({ where: { id: agentId } });
-    if (agent?.callbackUrl) {
-      const payload = buildWebhookPayload(
-        pending.requestId,
-        agentId,
-        action,
-        params,
-        evaluation.reason,
-      );
-      sendWebhookNotification(agent.callbackUrl, payload).catch(() => {});
-    }
-
-    // Block until admin approves/denies or timeout
-    const resolution = await waitForResolution(pending.requestId, HITL_TIMEOUT_MS);
-
-    if (resolution === 'denied') {
-      await appendAuditRecordSafely({
-        agentId,
-        action,
-        targetUrl: target.url,
-        targetMethod: target.method,
-        credentialId,
-        policyDecision: 'ESCALATE',
-        policyId: evaluation.policyId,
-        reason: 'Request denied by human reviewer',
-        params,
-        durationMs: Date.now() - start,
-        hitlRequestId: pending.requestId,
-        outcome: 'denied',
-      });
-      throw new ForbiddenError('Request denied by human reviewer');
-    }
-    if (resolution === 'timeout') {
-      await appendAuditRecordSafely({
-        agentId,
-        action,
-        targetUrl: target.url,
-        targetMethod: target.method,
-        credentialId,
-        policyDecision: 'ESCALATE',
-        policyId: evaluation.policyId,
-        reason: 'Request timed out waiting for human approval',
-        params,
-        durationMs: Date.now() - start,
-        hitlRequestId: pending.requestId,
-        outcome: 'denied',
-      });
-      throw new ForbiddenError('Request timed out waiting for human approval');
-    }
+    const hitlRequestId = await waitForHumanApproval({
+      agentId,
+      credentialId,
+      action,
+      params,
+      target,
+      injection,
+      timeout,
+      policyId: evaluation.policyId,
+      reason: evaluation.reason,
+      start,
+    });
 
     // Approved — continue with upstream call
     return executeUpstreamCall(
@@ -457,7 +567,7 @@ export async function executeProxy(input: ProxyExecuteInput): Promise<ProxyResul
       params,
       evaluation.policyId,
       start,
-      pending.requestId,
+      hitlRequestId,
     );
   }
 
@@ -473,6 +583,8 @@ export async function executeProxy(input: ProxyExecuteInput): Promise<ProxyResul
     params,
     evaluation.policyId,
     start,
+    undefined,
+    intentReview,
   );
 }
 

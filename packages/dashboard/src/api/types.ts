@@ -51,6 +51,21 @@ export interface PolicyConstraints {
     windowSeconds: number;
   };
   ipAllowlist?: string[];
+  intentReview?: {
+    enabled: boolean;
+    mode?: 'escalate_on_risk';
+    instructions?: string;
+  };
+}
+
+export interface IntentJudgeVerdict {
+  decision: 'SAFE' | 'NEEDS_APPROVAL';
+  riskLevel: 'low' | 'medium' | 'high';
+  confidence: number;
+  reasons: string[];
+  provider: string;
+  model: string;
+  promptVersion: string;
 }
 
 export interface HitlRequest {
@@ -70,6 +85,7 @@ export interface HitlRequest {
   timeout?: number;
   policyId: string | null;
   reason: string;
+  intentReview?: IntentJudgeVerdict;
   createdAt: string;
   resolvedBy?: string;
   denialReason?: string;
@@ -89,6 +105,7 @@ export interface AuditRecordDocument {
   previousHash: string;
   timestamp: string;
   hitlRequestId?: string;
+  intentReview?: IntentJudgeVerdict;
   upstreamStatus?: number;
   outcome?: 'executed' | 'denied' | 'failed';
   error?: string;

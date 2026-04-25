@@ -16,6 +16,11 @@ export interface PolicyConstraints {
     windowSeconds: number;
   };
   ipAllowlist?: string[];
+  intentReview?: {
+    enabled: boolean;
+    mode?: 'escalate_on_risk';
+    instructions?: string;
+  };
 }
 
 export interface CreatePolicyInput {

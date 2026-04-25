@@ -278,6 +278,29 @@ describe('evaluateRequest', () => {
     expect(result.decision).toBe('ALLOW');
   });
 
+  it('returns intent review metadata when an active policy opts in', async () => {
+    mockFindMany.mockResolvedValue([
+      makePolicy({
+        constraints: {
+          intentReview: {
+            enabled: true,
+            mode: 'escalate_on_risk',
+            instructions: 'Escalate destructive intent.',
+          },
+        },
+      }),
+    ]);
+
+    const result = await evaluateRequest('agent-1', 'cred-1', 'charges.create');
+    expect(result.decision).toBe('ALLOW');
+    expect(result.intentReview).toEqual({
+      enabled: true,
+      mode: 'escalate_on_risk',
+      instructions: 'Escalate destructive intent.',
+      policyId: 'policy-1',
+    });
+  });
+
   it('returns DENY outside time window', async () => {
     vi.setSystemTime(new Date('2026-03-18T22:00:00Z')); // Wednesday 22:00 UTC
     mockFindMany.mockResolvedValue([

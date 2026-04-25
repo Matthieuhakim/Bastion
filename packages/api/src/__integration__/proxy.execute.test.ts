@@ -141,6 +141,33 @@ describe('POST /v1/proxy/execute', () => {
       expect(res.body.upstream.status).toBe(404);
       expect(res.body.upstream.body).toEqual({ error: 'not found' });
     });
+
+    it('accepts opt-in intent review policy config while global judge is disabled', async () => {
+      const agent = await createTestAgent();
+      const credential = await createTestCredential(agent.id);
+      const policy = await createTestPolicy(agent.id, credential.id, {
+        constraints: {
+          intentReview: {
+            enabled: true,
+            mode: 'escalate_on_risk',
+            instructions: 'Escalate destructive intent.',
+          },
+        },
+      });
+
+      mockUpstreamResponse(200, { ok: true });
+
+      const res = await agentAuthed('post', '/v1/proxy/execute', agent.agentSecret).send({
+        credentialId: credential.id,
+        action: 'test.get',
+        target: { url: 'https://api.example.com/data', method: 'GET' },
+      });
+
+      expect(policy.constraints.intentReview.enabled).toBe(true);
+      expect(res.status).toBe(200);
+      expect(res.body.meta.policyDecision).toBe('ALLOW');
+      expect(mockFetch).toHaveBeenCalledOnce();
+    });
   });
 
   describe('policy enforcement', () => {

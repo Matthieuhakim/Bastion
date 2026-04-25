@@ -1,6 +1,7 @@
 import type { AuditRecord, Prisma } from '@prisma/client';
 import { Prisma as PrismaNamespace } from '@prisma/client';
 import type { PolicyDecision, EvaluationParams } from './policyEngine.js';
+import type { IntentJudgeVerdict } from './intentJudge.js';
 import { prisma } from './db.js';
 import { canonicalize } from './canonicalize.js';
 import { sha256, signHash, verifySignature } from './crypto.js';
@@ -22,6 +23,7 @@ export interface AppendAuditRecordInput {
   params?: EvaluationParams;
   durationMs: number;
   hitlRequestId?: string;
+  intentReview?: IntentJudgeVerdict;
   upstreamStatus?: number;
   outcome?: 'executed' | 'denied' | 'failed';
   error?: string;
@@ -41,6 +43,7 @@ export interface AuditRecordDocument {
   previousHash: string;
   timestamp: string;
   hitlRequestId?: string;
+  intentReview?: IntentJudgeVerdict;
   upstreamStatus?: number;
   outcome?: 'executed' | 'denied' | 'failed';
   error?: string;
@@ -141,6 +144,7 @@ function buildRecordDocument(
     previousHash: toHex(previousHash),
     timestamp,
     ...(input.hitlRequestId ? { hitlRequestId: input.hitlRequestId } : {}),
+    ...(input.intentReview ? { intentReview: input.intentReview } : {}),
     ...(input.upstreamStatus !== undefined ? { upstreamStatus: input.upstreamStatus } : {}),
     ...(input.outcome ? { outcome: input.outcome } : {}),
     ...(input.error ? { error: input.error } : {}),
