@@ -8,11 +8,16 @@ wrap it with bastion_guard, and pass the wrapped tool to your agent.
 
 from __future__ import annotations
 
+import os
+from pathlib import Path
+
 from bastion import Bastion, policy
 from bastion.adapters.openai_agents import BastionPermissionError, bastion_guard
 
 
 def main() -> None:
+    os.environ.setdefault("BASTION_HOME", str(Path(__file__).resolve().parent / ".bastion"))
+
     bastion = Bastion(
         agent_id="oai-sketch",
         policies=[

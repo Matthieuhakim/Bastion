@@ -77,6 +77,8 @@ if decision.outcome == "allow":
 
 `bastion verify my-agent` walks the chain and confirms every record's hash, signature, and link. `bastion report my-agent` prints a colored table; pass `--format markdown|html|json` for export. `bastion watch my-agent` opens a live Textual dashboard.
 
+By default, Bastion stores local state in `.bastion/` at the nearest enclosing git repository root. Set `BASTION_HOME=/path/to/.bastion` to pin state somewhere else.
+
 ## Wiring into Claude Agent SDK
 
 ```python
@@ -105,7 +107,7 @@ The full demo at `examples/run_demo.py` exercises:
 | Charge $200 | `charge_card(amount=200)` | ESCALATE → HITL prompt |
 | Read PII file | `read_file("/tmp/bastion-demo/ssn_records.txt")` | DENY (LLM judge) |
 
-Run with `ANTHROPIC_API_KEY` set: `python examples/run_demo.py`.
+Run with `ANTHROPIC_API_KEY` set: `python examples/run_demo.py`. The demo pins its audit DB and keys under `examples/.bastion/`; use `BASTION_HOME=examples/.bastion bastion verify demo-agent` for CLI commands against that demo state.
 
 ## How verification works
 
@@ -131,7 +133,7 @@ Mutating the body breaks check 1. Forging a signature without the private key fa
 
 - **Not a network proxy.** Bastion runs in-process. An agent that doesn't call `bastion.evaluate()` is not gated.
 - **Not protection against a malicious agent author.** Anyone with write access to your agent code can bypass Bastion. The threat model is mistakes, prompt injection, cost runaway, and forensic gaps — not Mallory.
-- **Not a key-management product.** Keys live unencrypted under `~/.bastion/agent_keys/`. For a real deployment you'd plug into a secrets store.
+- **Not a key-management product.** Keys live unencrypted under `.bastion/agent_keys/`. For a real deployment you'd plug into a secrets store.
 - **Not a multi-tenant audit service.** One file per agent, single writer. Concurrent writes from multiple processes are not supported.
 
 ## Known issues

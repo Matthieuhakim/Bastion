@@ -13,7 +13,7 @@ Policies:
   - escalate charges over $30 (HITL prompt)
   - NL: don't access files containing personal information
 
-The Bastion store and keys live under ~/.bastion/ unless BASTION_HOME is set.
+The demo sets BASTION_HOME so the store and keys live under examples/.bastion/.
 """
 
 from __future__ import annotations

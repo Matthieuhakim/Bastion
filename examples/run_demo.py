@@ -3,7 +3,7 @@
 Requirements:
   - ANTHROPIC_API_KEY in env
   - The Claude Agent SDK CLI installed (`claude-agent-sdk` does this)
-  - The demo agent state will be created at ~/.bastion/demo-agent.db
+  - The demo agent state will be created at examples/.bastion/demo-agent.db
 
 Scenarios (printed before each run):
   1. Read a normal file                   -> ALLOW
@@ -30,14 +30,19 @@ from rich.panel import Panel
 from rich.rule import Rule
 
 # Allow `python examples/run_demo.py` from the repo root.
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+EXAMPLES_DIR = Path(__file__).resolve().parent
+REPO_ROOT = EXAMPLES_DIR.parent
+sys.path.insert(0, str(REPO_ROOT))
+
+# Keep demo audit state inside the demo project instead of the Bastion repo root.
+os.environ.setdefault("BASTION_HOME", str(EXAMPLES_DIR / ".bastion"))
 
 # Load .env from repo root so ANTHROPIC_API_KEY is available without
 # the user having to `export` it in their shell.
 try:
     from dotenv import load_dotenv
 
-    load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+    load_dotenv(REPO_ROOT / ".env")
 except ImportError:
     pass
 

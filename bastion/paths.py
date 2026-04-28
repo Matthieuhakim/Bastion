@@ -2,11 +2,29 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 
 def bastion_home() -> Path:
-    return Path.home() / ".bastion"
+    configured = os.environ.get("BASTION_HOME")
+    if configured:
+        return Path(configured).expanduser().resolve()
+
+    return project_root() / ".bastion"
+
+
+def project_root(start: str | Path | None = None) -> Path:
+    """Return the nearest enclosing git repo root, or cwd when none exists."""
+    current = Path(start or Path.cwd()).expanduser().resolve()
+    if current.is_file():
+        current = current.parent
+
+    for candidate in (current, *current.parents):
+        if (candidate / ".git").exists():
+            return candidate
+
+    return current
 
 
 def agent_db_path(agent_id: str) -> Path:

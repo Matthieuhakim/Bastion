@@ -79,9 +79,9 @@ Bullet points only — slides will be built from these. Match the section headin
 
 ## Live-demo script (60 seconds)
 
-1. `bastion init demo-agent` → polished panel
+1. `BASTION_HOME=examples/.bastion bastion init demo-agent` → polished panel
 2. `python examples/run_demo.py` → 5 scenarios, watch decisions render
-3. `bastion verify demo-agent` → green panel
-4. `sqlite3 ~/.bastion/demo-agent.db "UPDATE audit_records SET record_json = REPLACE(record_json, 'allow', 'deny') WHERE id = 4;"`
-5. `bastion verify demo-agent` → red panel pinpointing record #4
-6. `bastion watch demo-agent` (in second terminal) ← already showing
+3. `BASTION_HOME=examples/.bastion bastion verify demo-agent` → green panel
+4. `sqlite3 examples/.bastion/demo-agent.db "UPDATE audit_records SET record_json = REPLACE(record_json, 'allow', 'deny') WHERE id = 4;"`
+5. `BASTION_HOME=examples/.bastion bastion verify demo-agent` → red panel pinpointing record #4
+6. `BASTION_HOME=examples/.bastion bastion watch demo-agent` (in second terminal) ← already showing
