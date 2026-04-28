@@ -1,6 +1,0 @@
-{
-  "tool": "web_fetch",
-  "args": {
-    "url": "__BYPASS_URL__"
-  }
-}
