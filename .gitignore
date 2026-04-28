@@ -43,6 +43,9 @@ Thumbs.db
 agent_keys/
 .bastion/
 
+# Claude Code (editor-local)
+.claude/
+
 # Secrets
 .env
 .env.*
