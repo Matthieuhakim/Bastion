@@ -155,6 +155,34 @@ def test_hitl_invoked_on_escalate():
     assert captured["decision"].outcome == "escalate"
 
 
+def test_evaluate_chain_returns_two_records_for_hitl_escalation():
+    def fake_hitl(decision, tool_name, input_data):
+        return Decision(
+            outcome="allow",
+            source="human",
+            policy_id="human.approved",
+            reason="approved",
+        )
+
+    engine = PolicyEngine(
+        [policy.escalate.above("amount", 30)],
+        hitl=fake_hitl,
+    )
+    chain = engine.evaluate_chain("charge", {"amount": 200})
+    assert len(chain) == 2
+    assert chain[0].outcome == "escalate"
+    assert chain[0].source == "code_policy"
+    assert chain[1].outcome == "allow"
+    assert chain[1].source == "human"
+
+
+def test_evaluate_chain_returns_one_record_for_simple_deny():
+    engine = PolicyEngine([policy.deny.tools("Bad")])
+    chain = engine.evaluate_chain("Bad", {})
+    assert len(chain) == 1
+    assert chain[0].outcome == "deny"
+
+
 def test_engine_returns_within_reasonable_time():
     engine = PolicyEngine([policy.deny.tools("Z") for _ in range(50)])
     start = time.perf_counter()

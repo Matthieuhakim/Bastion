@@ -1,12 +1,21 @@
 """Orchestrates the full policy decision flow for one tool call.
 
-Phase 3: code policies only. Subsequent phases plug in:
-  - Phase 4: an LLM judge for natural-language policies and `defer` outcomes.
-  - Phase 5: a HITL gate for `escalate` outcomes.
+Two entry points:
+  - evaluate_chain(): returns every Decision that should be signed and
+    appended to the audit chain (escalation followed by HITL resolution
+    is two records, for example). Used by the Bastion SDK in Phase 6.
+  - evaluate(): convenience that returns just the final Decision (the last
+    element of the chain). Used in tests and any caller that only cares
+    about the routing outcome.
 
-The engine accepts a list of policies (mixed code + NL) and optional
-judge / HITL handler callables. NL policies are detected by isinstance
-against the future NLPolicy type; until that exists this is a no-op.
+Routing rules (per the plan):
+  - Code policies run in order. deny short-circuits. escalate
+    short-circuits. defer marks the call for the LLM judge but lets
+    later code policies still deny.
+  - After code policies, if any deferred or any NL policy is configured
+    and a judge is wired, the judge runs.
+  - If the resulting decision is escalate and a HITL handler is wired,
+    the handler runs and its resolution is appended as a separate record.
 """
 
 from __future__ import annotations
@@ -28,8 +37,6 @@ class PolicyEngine:
         judge: JudgeFn | None = None,
         hitl: HITLFn | None = None,
     ) -> None:
-        # NL policies are recognized by an opt-in flag so we don't need to
-        # import nl_policy here (avoids a circular dep before Phase 4 lands).
         self.code_policies: list[Policy] = []
         self.nl_policies: list[Policy] = []
         for p in policies:
@@ -41,69 +48,64 @@ class PolicyEngine:
         self.hitl = hitl
 
     def evaluate(self, tool_name: str, input_data: dict[str, Any]) -> Decision:
+        return self.evaluate_chain(tool_name, input_data)[-1]
+
+    def evaluate_chain(
+        self, tool_name: str, input_data: dict[str, Any]
+    ) -> list[Decision]:
         start = time.perf_counter()
+        chain: list[Decision] = []
         deferred = False
-        triggering_policy_id: str | None = None
 
         for policy in self.code_policies:
             decision = policy.evaluate(tool_name, input_data)
 
             if decision.outcome == "deny":
-                return self._maybe_hitl(self._stamp(decision, start), tool_name, input_data, start)
+                chain.append(self._stamp(decision, start))
+                return chain
 
             if decision.outcome == "escalate":
-                triggering_policy_id = decision.policy_id
-                escalation = self._stamp(decision, start)
-                return self._maybe_hitl(escalation, tool_name, input_data, start)
+                chain.append(self._stamp(decision, start))
+                self._apply_hitl(chain, tool_name, input_data)
+                return chain
 
             if decision.outcome == "defer":
                 deferred = True
-                triggering_policy_id = decision.policy_id
 
         needs_judge = (deferred or self.nl_policies) and self.judge is not None
         if needs_judge:
             judge_decision = self.judge(self.nl_policies, tool_name, input_data)
-            stamped = self._stamp(judge_decision, start)
-            if stamped.outcome in ("deny", "escalate"):
-                return self._maybe_hitl(stamped, tool_name, input_data, start)
-            return stamped
+            chain.append(self._stamp(judge_decision, start))
+            if judge_decision.outcome == "escalate":
+                self._apply_hitl(chain, tool_name, input_data)
+            return chain
 
-        if deferred and self.judge is None:
-            return self._stamp(
+        chain.append(
+            self._stamp(
                 Decision(
                     outcome="allow",
                     source="code_policy",
-                    policy_id=triggering_policy_id or "default.allow",
-                    reason="deferred but no judge configured; defaulting to allow",
+                    policy_id="default.allow",
+                    reason="no code policy matched",
                 ),
                 start,
             )
-
-        return self._stamp(
-            Decision(
-                outcome="allow",
-                source="code_policy",
-                policy_id="default.allow",
-                reason="no code policy matched",
-            ),
-            start,
         )
+        return chain
 
-    def _stamp(self, decision: Decision, start: float) -> Decision:
-        decision.latency_ms = max(1, int((time.perf_counter() - start) * 1000))
-        return decision
-
-    def _maybe_hitl(
+    def _apply_hitl(
         self,
-        decision: Decision,
+        chain: list[Decision],
         tool_name: str,
         input_data: dict[str, Any],
-        start: float,
-    ) -> Decision:
-        if decision.outcome != "escalate" or self.hitl is None:
-            return decision
-        resolution = self.hitl(decision, tool_name, input_data)
-        # The HITL handler returns its own decision (source='human').
-        # Engine doesn't re-stamp latency on the HITL result; that decision
-        # carries its own meaning and the wait time is human-driven.
-        return resolution
+    ) -> None:
+        if self.hitl is None:
+            return
+        resolution = self.hitl(chain[-1], tool_name, input_data)
+        chain.append(resolution)
+
+    def _stamp(self, decision: Decision, start: float) -> Decision:
+        # Don't stomp latency that was already set (judge sets its own).
+        if decision.latency_ms == 0:
+            decision.latency_ms = max(1, int((time.perf_counter() - start) * 1000))
+        return decision
