@@ -65,7 +65,8 @@ Bullet points only — slides will be built from these. Match the section headin
 - **LLM judge non-determinism.** Same prompt, different outcomes. We mitigate by routing borderline cases to HITL, but the unpredictability is real.
 - **SQLite single-writer.** No concurrent agents per chain. Real deployments would need WAL discipline or a different store.
 - **Threat model honesty.** Bastion can't stop a malicious agent author. We say so in the README; the slides should too.
-- **Live integration tests skipped without API key.** The Phase 4/7/8 live checkpoints (NL judge + Claude agent + full demo) are sketched and unit-tested but not exercised end-to-end in this build session.
+- **Judge prompt is a tuning surface.** Initial prompt was too cautious — it escalated normal calls because it speculated about what tools "might" touch. Revised to anchor decisions in concrete evidence in the visible inputs, default to allow when there's no evidence either way. Real-world deployments will need to iterate on this prompt for their domain.
+- **Built-in tools surprise.** When you wire Bastion into a Claude Agent, the agent uses Claude Code's built-in tools (ToolSearch, etc.) by default — and every one of them passes through the policy stack. For demos and most production cases you want `tools=[]` to disable built-ins so only your MCP tools are visible.
 
 ## 8. What's next
 

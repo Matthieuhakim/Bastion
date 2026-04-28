@@ -136,9 +136,10 @@ Mutating the body breaks check 1. Forging a signature without the private key fa
 
 ## Known issues
 
-- The Claude Agent SDK's `can_use_tool` callback doesn't fire reliably in some CLI versions. If you see tool calls slipping past Bastion, switch to `wire(bastion, mode="pre_tool_use_hook")`.
+- The Claude Agent SDK's `can_use_tool` callback **requires streaming-mode prompts** (`AsyncIterable[dict]`). If you call `query(prompt="...")` with a plain string and `can_use_tool` is set, you'll see `ValueError: can_use_tool callback requires streaming mode`. Use `wire(bastion, mode="pre_tool_use_hook")` instead — that wires Bastion via a PreToolUse hook, which works with both string and streaming prompts. The bundled demo (`examples/demo_agent.py`) uses this mode for that reason.
 - The default LLM judge model is `claude-sonnet-4-6`. If your account doesn't have access, pass `judge_model=...` to `Bastion(...)`.
 - The CLI HITL prompt uses Python `input()` with a thread-based timeout. If you Ctrl-C during a prompt the input thread leaks until the next stdin read.
+- `python-dotenv` is only loaded in `examples/run_demo.py`; the SDK itself does not auto-load `.env`. If you embed Bastion in your own app and want NL policies, either `export ANTHROPIC_API_KEY` in your shell or load your own `.env` before constructing `Bastion(...)`.
 
 ## Performance
 

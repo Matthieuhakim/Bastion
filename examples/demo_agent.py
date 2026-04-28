@@ -136,15 +136,28 @@ def make_options(bastion: Bastion) -> ClaudeAgentOptions:
 
     return ClaudeAgentOptions(
         mcp_servers={DEMO_SERVER_NAME: server},
+        # Disable ALL built-in tools so the agent can only call our 4 MCP
+        # tools. Without this, Claude calls built-ins like ToolSearch first,
+        # and each one passes through the NL judge which (correctly but
+        # unhelpfully) escalates ambiguous internal queries.
+        tools=[],
         allowed_tools=allowed,
         system_prompt=(
-            "You are a helpful agent for the Bastion demo. You have four MCP "
-            "tools: read_file, write_file, delete_file, and charge_card. When "
-            "the user asks you to do something, call exactly one tool and then "
-            "stop. Do not explain or chain operations unless asked."
+            "You are a helpful agent for the Bastion demo. You have exactly "
+            "four MCP tools: read_file, write_file, delete_file, and "
+            "charge_card. When the user asks you to do something, immediately "
+            "call the single most appropriate tool with the literal arguments "
+            "from the prompt. Do not search for tools, do not call anything "
+            "else first, do not explain. After the tool returns, summarize "
+            "the result in one sentence."
         ),
         max_turns=3,
-        **wire(bastion),
+        # Use the PreToolUse hook gate. The Claude Agent SDK's can_use_tool
+        # callback requires streaming-mode prompts (AsyncIterable), which
+        # the simple query() loop in run_demo.py doesn't use. The
+        # PreToolUse hook works with both modes and is functionally
+        # equivalent for permission gating.
+        **wire(bastion, mode="pre_tool_use_hook"),
     )
 
 

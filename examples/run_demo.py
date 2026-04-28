@@ -21,6 +21,7 @@ After all scenarios:
 from __future__ import annotations
 
 import asyncio
+import os
 import sys
 from pathlib import Path
 
@@ -30,6 +31,24 @@ from rich.rule import Rule
 
 # Allow `python examples/run_demo.py` from the repo root.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+# Load .env from repo root so ANTHROPIC_API_KEY is available without
+# the user having to `export` it in their shell.
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+except ImportError:
+    pass
+
+if not os.environ.get("ANTHROPIC_API_KEY"):
+    print(
+        "ERROR: ANTHROPIC_API_KEY not found.\n"
+        "Either export it in your shell or put it in a .env file at the "
+        "repo root: ANTHROPIC_API_KEY=sk-...",
+        file=sys.stderr,
+    )
+    sys.exit(1)
 
 from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock, query  # noqa: E402
 
