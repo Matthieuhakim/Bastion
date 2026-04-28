@@ -155,8 +155,102 @@ class Bastion:
     def verify(self) -> VerificationReport:
         return verify_chain(self.store, self._public_key)
 
-    def report(self) -> Table:
-        """Tabular summary of the current chain. Phase 9 expands this."""
+    def report(self, format: str = "table") -> Any:
+        """Tabular summary of the audit chain.
+
+        format='table' (default): rich.Table -> print or capture via Console.
+        format='markdown'        : str (GitHub-flavored markdown table).
+        format='html'            : str (full HTML page rendered from the table).
+        format='json'            : str (pretty-printed JSON array of bodies).
+        """
+        if format == "table":
+            return self._render_table()
+        if format == "markdown":
+            return self._render_markdown()
+        if format == "html":
+            return self._render_html()
+        if format == "json":
+            return self._render_json()
+        raise ValueError(
+            f"unknown report format: {format!r} "
+            "(expected one of: table, markdown, html, json)"
+        )
+
+    def summary_stats(self) -> dict[str, Any]:
+        """Counts and averages over the current chain.
+
+        Returns a dict with: total, by_decision, by_source, by_event,
+        avg_latency_ms_by_source, hitl_total, hitl_approved, hitl_denied,
+        denied_total, allowed_total.
+        """
+        bodies = [json.loads(r.record_json) for r in self.store.iter_records()]
+
+        by_decision: dict[str, int] = {}
+        by_source: dict[str, int] = {}
+        by_event: dict[str, int] = {}
+        latencies: dict[str, list[int]] = {}
+        hitl_total = hitl_approved = hitl_denied = 0
+        denied_total = allowed_total = 0
+
+        for b in bodies:
+            event = b.get("event")
+            if event:
+                by_event[event] = by_event.get(event, 0) + 1
+            decision = b.get("decision")
+            if decision is None and "success" in b:
+                decision = "success" if b["success"] else "failure"
+            decision = str(decision) if decision is not None else ""
+            by_decision[decision] = by_decision.get(decision, 0) + 1
+            source = b.get("decision_source") or ""
+            by_source[source] = by_source.get(source, 0) + 1
+            latency = int(b.get("latency_ms", 0) or 0)
+            latencies.setdefault(source, []).append(latency)
+
+            if event == "hitl_decision":
+                hitl_total += 1
+                if decision == "allow":
+                    hitl_approved += 1
+                elif decision == "deny":
+                    hitl_denied += 1
+            if decision == "deny":
+                denied_total += 1
+            if decision == "allow":
+                allowed_total += 1
+
+        avg_latency_ms_by_source = {
+            s: round(sum(L) / len(L), 2) if L else 0
+            for s, L in latencies.items()
+        }
+
+        return {
+            "total": len(bodies),
+            "by_decision": by_decision,
+            "by_source": by_source,
+            "by_event": by_event,
+            "avg_latency_ms_by_source": avg_latency_ms_by_source,
+            "hitl_total": hitl_total,
+            "hitl_approved": hitl_approved,
+            "hitl_denied": hitl_denied,
+            "denied_total": denied_total,
+            "allowed_total": allowed_total,
+        }
+
+    # ----- report renderers -----
+
+    def _iter_bodies(self) -> list[tuple[int, dict[str, Any]]]:
+        return [(r.id, json.loads(r.record_json)) for r in self.store.iter_records()]
+
+    @staticmethod
+    def _decision_style(value: str) -> str:
+        return {
+            "allow": "green",
+            "deny": "red",
+            "escalate": "yellow",
+            "success": "green",
+            "failure": "red",
+        }.get(value, "")
+
+    def _render_table(self) -> Table:
         table = Table(
             title=f"Bastion audit log: {self.agent_id}",
             border_style="cyan",
@@ -169,30 +263,74 @@ class Bastion:
         table.add_column("Tool")
         table.add_column("Decision")
         table.add_column("Source")
-        table.add_column("Latency")
+        table.add_column("Latency", justify="right")
         table.add_column("Reason", max_width=50)
 
-        for stored in self.store.iter_records():
-            body = json.loads(stored.record_json)
-            decision = str(body.get("decision", body.get("success", "")))
-            decision_style = {
-                "allow": "green",
-                "deny": "red",
-                "escalate": "yellow",
-                "True": "green",
-                "False": "red",
-            }.get(decision, "")
+        for record_id, body in self._iter_bodies():
+            decision = body.get("decision")
+            if decision is None and "success" in body:
+                decision = "success" if body["success"] else "failure"
+            decision = str(decision) if decision is not None else ""
+            style = self._decision_style(decision)
+            decision_cell = (
+                f"[{style}]{decision}[/{style}]" if style else decision
+            )
             table.add_row(
-                str(stored.id),
+                str(record_id),
                 str(body.get("timestamp", "")),
                 str(body.get("event", "")),
-                str(body.get("tool_name", "-")),
-                f"[{decision_style}]{decision}[/{decision_style}]" if decision_style else decision,
+                str(body.get("tool_name") or "-"),
+                decision_cell,
                 str(body.get("decision_source", "")),
                 f"{body.get('latency_ms', 0)}ms",
                 str(body.get("reason", "")),
             )
         return table
+
+    def _render_markdown(self) -> str:
+        lines = [
+            f"# Bastion audit log: {self.agent_id}",
+            "",
+            f"_fingerprint {self.fingerprint} | "
+            f"records: {self.store.count()}_",
+            "",
+            "| # | Time | Event | Tool | Decision | Source | Latency | Reason |",
+            "|---|------|-------|------|----------|--------|---------|--------|",
+        ]
+        for record_id, body in self._iter_bodies():
+            decision = body.get("decision")
+            if decision is None and "success" in body:
+                decision = "success" if body["success"] else "failure"
+            reason = str(body.get("reason", "")).replace("|", "\\|").replace("\n", " ")
+            if len(reason) > 100:
+                reason = reason[:97] + "..."
+            lines.append(
+                f"| {record_id} "
+                f"| {body.get('timestamp', '')} "
+                f"| {body.get('event', '')} "
+                f"| {body.get('tool_name') or '-'} "
+                f"| {decision or ''} "
+                f"| {body.get('decision_source', '')} "
+                f"| {body.get('latency_ms', 0)}ms "
+                f"| {reason} |"
+            )
+        return "\n".join(lines)
+
+    def _render_html(self) -> str:
+        from rich.console import Console as RichConsole
+
+        recorder = RichConsole(record=True, width=200, file=None)
+        recorder.print(self._render_table())
+        return recorder.export_html(inline_styles=True)
+
+    def _render_json(self) -> str:
+        out: list[dict[str, Any]] = []
+        for stored in self.store.iter_records():
+            body = json.loads(stored.record_json)
+            body["_record_hash"] = stored.record_hash.hex()
+            body["_signature"] = stored.signature.hex()
+            out.append(body)
+        return json.dumps(out, indent=2, sort_keys=True)
 
     def close(self) -> None:
         if not self._closed:

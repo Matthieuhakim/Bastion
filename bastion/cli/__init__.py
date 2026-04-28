@@ -28,6 +28,7 @@ def version() -> None:
 
 # Subcommands register themselves via @app.command() side effects on import.
 from bastion.cli import init as _init  # noqa: E402, F401
+from bastion.cli import report as _report  # noqa: E402, F401
 from bastion.cli import verify as _verify  # noqa: E402, F401
 
 
