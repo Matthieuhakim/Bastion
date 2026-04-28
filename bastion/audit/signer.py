@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
+
+from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ed25519
-from cryptography.exceptions import InvalidSignature
 
 
 def generate_keypair() -> tuple[bytes, bytes]:
@@ -44,6 +46,11 @@ def public_key_bytes(public_key: ed25519.Ed25519PublicKey) -> bytes:
         encoding=serialization.Encoding.Raw,
         format=serialization.PublicFormat.Raw,
     )
+
+
+def fingerprint(public_key: ed25519.Ed25519PublicKey) -> str:
+    """Short identifier for a public key: first 16 hex chars of SHA-256(raw)."""
+    return hashlib.sha256(public_key_bytes(public_key)).hexdigest()[:16]
 
 
 def sign(private_key: ed25519.Ed25519PrivateKey, message: bytes) -> bytes:

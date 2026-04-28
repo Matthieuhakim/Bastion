@@ -26,6 +26,11 @@ def version() -> None:
     typer.echo(f"bastion {__version__}")
 
 
+# Subcommands register themselves via @app.command() side effects on import.
+from bastion.cli import init as _init  # noqa: E402, F401
+from bastion.cli import verify as _verify  # noqa: E402, F401
+
+
 def main() -> None:
     app()
 
